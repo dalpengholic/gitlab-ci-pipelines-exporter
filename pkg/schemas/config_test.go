@@ -64,34 +64,47 @@ pull:
     on_init: false
     scheduled: false
     interval_seconds: 1
-  refs_from_projects:
+  environments_from_projects:
     on_init: false
     scheduled: false
     interval_seconds: 2
-  metrics:
+  refs_from_projects:
     on_init: false
     scheduled: false
     interval_seconds: 3
+  metrics:
+    on_init: false
+    scheduled: false
+    interval_seconds: 4
 
 garbage_collect:
   projects:
     on_init: true
     scheduled: false
     interval_seconds: 1
-  refs:
+  environments:
     on_init: true
     scheduled: false
     interval_seconds: 2
-  metrics:
+  refs:
     on_init: true
     scheduled: false
     interval_seconds: 3
+  metrics:
+    on_init: true
+    scheduled: false
+    interval_seconds: 4
 
 project_defaults:
   output_sparse_status_metrics: false
   pull:
+    environments:
+      enabled: true
+      name_regexp: "^baz$"
+      tags_regexp: "^blah$"
     refs:
       regexp: "^baz$"
+      max_age_seconds: 1
       from:
         pipelines:
           enabled: true
@@ -110,12 +123,22 @@ projects:
   - name: foo/project
   - name: bar/project
     pull:
+      environments:
+        enabled: false
+        name_regexp: "^foo$"
+        tags_regexp: "^foo$"
       refs:
         regexp: "^foo$"
+        max_age_seconds: 2
   - name: new/project
     pull:
+      environments:
+        enabled: false
+        name_regexp: "^foo$"
+        tags_regexp: "^foo$"
       refs:
         regexp: "^bar$"
+        max_age_seconds: 3
 
 wildcards:
   - owner:
@@ -124,8 +147,13 @@ wildcards:
     search: 'bar'
     archived: true
     pull:
+      environments:
+        enabled: false
+        name_regexp: "^foo$"
+        tags_regexp: "^foo$"
       refs:
         regexp: "^yolo$"
+        max_age_seconds: 4
 `)
 
 	cfg, err := ParseConfigFile(f.Name())
@@ -161,15 +189,20 @@ wildcards:
 				Scheduled:       false,
 				IntervalSeconds: 1,
 			},
-			ProjectRefsFromProjects: SchedulerConfig{
+			EnvironmentsFromProjects: SchedulerConfig{
 				OnInit:          false,
 				Scheduled:       false,
 				IntervalSeconds: 2,
 			},
-			ProjectRefsMetrics: SchedulerConfig{
+			RefsFromProjects: SchedulerConfig{
 				OnInit:          false,
 				Scheduled:       false,
 				IntervalSeconds: 3,
+			},
+			Metrics: SchedulerConfig{
+				OnInit:          false,
+				Scheduled:       false,
+				IntervalSeconds: 4,
 			},
 		},
 		GarbageCollect: GarbageCollectConfig{
@@ -178,22 +211,33 @@ wildcards:
 				Scheduled:       false,
 				IntervalSeconds: 1,
 			},
-			ProjectsRefs: SchedulerConfig{
+			Environments: SchedulerConfig{
 				OnInit:          true,
 				Scheduled:       false,
 				IntervalSeconds: 2,
 			},
-			ProjectsRefsMetrics: SchedulerConfig{
+			Refs: SchedulerConfig{
 				OnInit:          true,
 				Scheduled:       false,
 				IntervalSeconds: 3,
+			},
+			Metrics: SchedulerConfig{
+				OnInit:          true,
+				Scheduled:       false,
+				IntervalSeconds: 4,
 			},
 		},
 		ProjectDefaults: ProjectParameters{
 			OutputSparseStatusMetricsValue: pointy.Bool(false),
 			Pull: ProjectPull{
+				Environments: ProjectPullEnvironments{
+					EnabledValue:    pointy.Bool(true),
+					NameRegexpValue: pointy.String("^baz$"),
+					TagsRegexpValue: pointy.String("^blah$"),
+				},
 				Refs: ProjectPullRefs{
-					RegexpValue: pointy.String("^baz$"),
+					RegexpValue:        pointy.String("^baz$"),
+					MaxAgeSecondsValue: pointy.Uint(1),
 					From: ProjectPullRefsFrom{
 						Pipelines: ProjectPullRefsFromPipelines{
 							EnabledValue: pointy.Bool(true),
@@ -224,8 +268,14 @@ wildcards:
 				Name: "bar/project",
 				ProjectParameters: ProjectParameters{
 					Pull: ProjectPull{
+						Environments: ProjectPullEnvironments{
+							EnabledValue:    pointy.Bool(false),
+							NameRegexpValue: pointy.String("^foo$"),
+							TagsRegexpValue: pointy.String("^foo$"),
+						},
 						Refs: ProjectPullRefs{
-							RegexpValue: pointy.String("^foo$"),
+							RegexpValue:        pointy.String("^foo$"),
+							MaxAgeSecondsValue: pointy.Uint(2),
 						},
 					},
 				},
@@ -234,8 +284,14 @@ wildcards:
 				Name: "new/project",
 				ProjectParameters: ProjectParameters{
 					Pull: ProjectPull{
+						Environments: ProjectPullEnvironments{
+							EnabledValue:    pointy.Bool(false),
+							NameRegexpValue: pointy.String("^foo$"),
+							TagsRegexpValue: pointy.String("^foo$"),
+						},
 						Refs: ProjectPullRefs{
-							RegexpValue: pointy.String("^bar$"),
+							RegexpValue:        pointy.String("^bar$"),
+							MaxAgeSecondsValue: pointy.Uint(3),
 						},
 					},
 				},
@@ -254,8 +310,14 @@ wildcards:
 				},
 				ProjectParameters: ProjectParameters{
 					Pull: ProjectPull{
+						Environments: ProjectPullEnvironments{
+							EnabledValue:    pointy.Bool(false),
+							NameRegexpValue: pointy.String("^foo$"),
+							TagsRegexpValue: pointy.String("^foo$"),
+						},
 						Refs: ProjectPullRefs{
-							RegexpValue: pointy.String("^yolo$"),
+							RegexpValue:        pointy.String("^yolo$"),
+							MaxAgeSecondsValue: pointy.Uint(4),
 						},
 					},
 				},
@@ -287,6 +349,11 @@ func TestParseConfigDefaultsValues(t *testing.T) {
 
 	// Validate project default values
 	assert.Equal(t, defaultProjectOutputSparseStatusMetrics, cfg.ProjectDefaults.OutputSparseStatusMetrics())
+
+	assert.Equal(t, defaultProjectPullEnvironmentsEnabled, cfg.ProjectDefaults.Pull.Environments.Enabled())
+	assert.Equal(t, defaultProjectPullEnvironmentsNameRegexp, cfg.ProjectDefaults.Pull.Environments.NameRegexp())
+	assert.Equal(t, defaultProjectPullEnvironmentsTagsRegexp, cfg.ProjectDefaults.Pull.Environments.TagsRegexp())
+
 	assert.Equal(t, defaultProjectPullRefsRegexp, cfg.ProjectDefaults.Pull.Refs.Regexp())
 	assert.Equal(t, defaultProjectPullRefsFromPipelinesEnabled, cfg.ProjectDefaults.Pull.Refs.From.Pipelines.Enabled())
 	assert.Equal(t, defaultProjectPullRefsFromPipelinesDepth, cfg.ProjectDefaults.Pull.Refs.From.Pipelines.Depth())

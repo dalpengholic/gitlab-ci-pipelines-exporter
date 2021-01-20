@@ -10,7 +10,8 @@ import (
 
 const (
 	redisProjectsKey     string = `projects`
-	redisProjectsRefsKey string = `projectsRefs`
+	redisEnvironmentsKey string = `environments`
+	redisRefsKey         string = `refs`
 	redisMetricsKey      string = `metrics`
 )
 
@@ -52,12 +53,9 @@ func (r *Redis) GetProject(p *schemas.Project) error {
 			return err
 		}
 
-		storedProject := schemas.Project{}
-		if err = msgpack.Unmarshal([]byte(marshalledProject), &storedProject); err != nil {
+		if err = msgpack.Unmarshal([]byte(marshalledProject), p); err != nil {
 			return err
 		}
-
-		*p = storedProject
 	}
 
 	return nil
@@ -93,76 +91,142 @@ func (r *Redis) ProjectsCount() (int64, error) {
 	return r.HLen(r.ctx, redisProjectsKey).Result()
 }
 
-// SetProjectRef ..
-func (r *Redis) SetProjectRef(pr schemas.ProjectRef) error {
-	marshalledProjectRef, err := msgpack.Marshal(pr)
+// SetEnvironment ..
+func (r *Redis) SetEnvironment(e schemas.Environment) error {
+	marshalledEnvironment, err := msgpack.Marshal(e)
 	if err != nil {
 		return err
 	}
 
-	_, err = r.HSet(r.ctx, redisProjectsRefsKey, string(pr.Key()), marshalledProjectRef).Result()
+	_, err = r.HSet(r.ctx, redisEnvironmentsKey, string(e.Key()), marshalledEnvironment).Result()
 	return err
 }
 
-// DelProjectRef ..
-func (r *Redis) DelProjectRef(k schemas.ProjectRefKey) error {
-	_, err := r.HDel(r.ctx, redisProjectsRefsKey, string(k)).Result()
+// DelEnvironment ..
+func (r *Redis) DelEnvironment(k schemas.EnvironmentKey) error {
+	_, err := r.HDel(r.ctx, redisEnvironmentsKey, string(k)).Result()
 	return err
 }
 
-// GetProjectRef ..
-func (r *Redis) GetProjectRef(pr *schemas.ProjectRef) error {
-	exists, err := r.ProjectRefExists(pr.Key())
+// GetEnvironment ..
+func (r *Redis) GetEnvironment(e *schemas.Environment) error {
+	exists, err := r.EnvironmentExists(e.Key())
 	if err != nil {
 		return err
 	}
 
 	if exists {
-		k := pr.Key()
-		marshalledProjectRef, err := r.HGet(r.ctx, redisProjectsRefsKey, string(k)).Result()
+		k := e.Key()
+		marshalledEnvironment, err := r.HGet(r.ctx, redisEnvironmentsKey, string(k)).Result()
 		if err != nil {
 			return err
 		}
 
-		storedProjectRef := schemas.ProjectRef{}
-		if err = msgpack.Unmarshal([]byte(marshalledProjectRef), &storedProjectRef); err != nil {
+		if err = msgpack.Unmarshal([]byte(marshalledEnvironment), e); err != nil {
 			return err
 		}
-
-		*pr = storedProjectRef
 	}
 
 	return nil
 }
 
-// ProjectRefExists ..
-func (r *Redis) ProjectRefExists(k schemas.ProjectRefKey) (bool, error) {
-	return r.HExists(r.ctx, redisProjectsRefsKey, string(k)).Result()
+// EnvironmentExists ..
+func (r *Redis) EnvironmentExists(k schemas.EnvironmentKey) (bool, error) {
+	return r.HExists(r.ctx, redisEnvironmentsKey, string(k)).Result()
 }
 
-// ProjectsRefs ..
-func (r *Redis) ProjectsRefs() (schemas.ProjectsRefs, error) {
-	projectsRefs := schemas.ProjectsRefs{}
-	marshalledProjects, err := r.HGetAll(r.ctx, redisProjectsRefsKey).Result()
+// Environments ..
+func (r *Redis) Environments() (schemas.Environments, error) {
+	environments := schemas.Environments{}
+	marshalledProjects, err := r.HGetAll(r.ctx, redisEnvironmentsKey).Result()
 	if err != nil {
-		return projectsRefs, err
+		return environments, err
 	}
 
-	for stringProjectRefKey, marshalledProjectRef := range marshalledProjects {
-		p := schemas.ProjectRef{}
+	for stringEnvironmentKey, marshalledEnvironment := range marshalledProjects {
+		p := schemas.Environment{}
 
-		if err = msgpack.Unmarshal([]byte(marshalledProjectRef), &p); err != nil {
-			return projectsRefs, err
+		if err = msgpack.Unmarshal([]byte(marshalledEnvironment), &p); err != nil {
+			return environments, err
 		}
-		projectsRefs[schemas.ProjectRefKey(stringProjectRefKey)] = p
+		environments[schemas.EnvironmentKey(stringEnvironmentKey)] = p
 	}
 
-	return projectsRefs, nil
+	return environments, nil
 }
 
-// ProjectsRefsCount ..
-func (r *Redis) ProjectsRefsCount() (int64, error) {
-	return r.HLen(r.ctx, redisProjectsRefsKey).Result()
+// EnvironmentsCount ..
+func (r *Redis) EnvironmentsCount() (int64, error) {
+	return r.HLen(r.ctx, redisEnvironmentsKey).Result()
+}
+
+// SetRef ..
+func (r *Redis) SetRef(ref schemas.Ref) error {
+	marshalledRef, err := msgpack.Marshal(ref)
+	if err != nil {
+		return err
+	}
+
+	_, err = r.HSet(r.ctx, redisRefsKey, string(ref.Key()), marshalledRef).Result()
+	return err
+}
+
+// DelRef ..
+func (r *Redis) DelRef(k schemas.RefKey) error {
+	_, err := r.HDel(r.ctx, redisRefsKey, string(k)).Result()
+	return err
+}
+
+// GetRef ..
+func (r *Redis) GetRef(ref *schemas.Ref) error {
+	exists, err := r.RefExists(ref.Key())
+	if err != nil {
+		return err
+	}
+
+	if exists {
+		k := ref.Key()
+		marshalledRef, err := r.HGet(r.ctx, redisRefsKey, string(k)).Result()
+		if err != nil {
+			return err
+		}
+
+		if err = msgpack.Unmarshal([]byte(marshalledRef), ref); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// RefExists ..
+func (r *Redis) RefExists(k schemas.RefKey) (bool, error) {
+	return r.HExists(r.ctx, redisRefsKey, string(k)).Result()
+}
+
+// Refs ..
+func (r *Redis) Refs() (schemas.Refs, error) {
+	refs := schemas.Refs{}
+	marshalledProjects, err := r.HGetAll(r.ctx, redisRefsKey).Result()
+	if err != nil {
+		return refs, err
+	}
+
+	for stringRefKey, marshalledRef := range marshalledProjects {
+		p := schemas.Ref{}
+
+		if err = msgpack.Unmarshal([]byte(marshalledRef), &p); err != nil {
+			return refs, err
+		}
+		refs[schemas.RefKey(stringRefKey)] = p
+	}
+
+	return refs, nil
+}
+
+// RefsCount ..
+func (r *Redis) RefsCount() (int64, error) {
+	return r.HLen(r.ctx, redisRefsKey).Result()
 }
 
 // SetMetric ..
@@ -201,12 +265,9 @@ func (r *Redis) GetMetric(m *schemas.Metric) error {
 			return err
 		}
 
-		storedMetric := schemas.Metric{}
-		if err = msgpack.Unmarshal([]byte(marshalledMetric), &storedMetric); err != nil {
+		if err = msgpack.Unmarshal([]byte(marshalledMetric), m); err != nil {
 			return err
 		}
-
-		*m = storedMetric
 	}
 
 	return nil

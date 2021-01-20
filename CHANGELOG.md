@@ -7,6 +7,85 @@ and this project adheres to [0ver](https://0ver.org) (more or less).
 
 ## [Unreleased]
 
+### Added
+
+- GPG sign released artifacts checksums
+- Support for performing requests through a forward proxy using standard env variables
+
+### Changed
+
+- Fixed a bug on child/downstream pipelines pull when the trigger has not been fired yet
+- Updated all dependencies
+
+## [v0.4.6] - 2020-12-16
+
+### Added
+
+- When configured to export job metrics, it will now pull child/downstream pipelines jobs related ones as well
+- New `runner_description` label for all the `job` related metrics.
+- Release GitHub container registry based images: [ghcr.io/mvisonneau/gitlab-ci-pipelines-exporter](https://github.com/users/mvisonneau/packages/container/package/gitlab-ci-pipelines-exporter)
+- Release `arm64v8` based container images as part of docker manifests in both **docker.io** and **ghcr.io**
+
+### Changed
+
+- Ensure consistency of the exported metrics by distinguishing immutable from mutable labels used as metric key
+- Updated all dependencies
+- Migrated CI from Drone to GitHub actions
+
+## [v0.4.5] - 2020-11-27
+
+### Added
+
+- Implemented a `max_age_seconds` parameter to determine whether to pull a "stale ref" or not
+
+### Changed
+
+- When fetching refs from pipelines, capped the maximum length to 100 in order to prevent the API call from failing
+- Garbage collect merge requests refs in order to keep the depth value as a maximum
+- Prevent potential nil pointers when exporting environments information
+- Updated all dependencies
+
+## [v0.4.4] - 2020-11-20
+
+### Added
+
+- Automatically refresh _pkg.go.dev_ on new releases
+
+### Changed
+
+- Do not delete environments metrics when ref is a tag which may not be configured to be monitored for pipelines/jobs (#182)
+- Fixed a bug making `latest_commit_short_id` labels reflect incorrect information on environment metrics when tags are used as refs
+- Enhanced logging for jobs pulling function
+- Bumped goreleaser to 0.147.1
+- Bumped all dependencies
+
+## [v0.4.3] - 2020-11-04
+
+### Added
+
+- Export `environments/deployments` related metrics
+- New `environments/deployments` and `jobs` grafana dashboards
+- Documented the list of exported metrics
+- Released **.deb** and **.rpm** packages
+- More complete garbage collector capabilities
+- Newly supported statuses for pipelines and jobs: `created`, `waiting_for_resource`, `preparing`, `scheduled`
+- GitLab links for pipelines, jobs, environments and deployments in the dashboards
+
+### Changed
+
+- Prefix new releases with `^v` to make pkg.go.dev happy
+- Bumped all dependencies
+- Fixed race conditions during tests
+- Always return coverage metric
+- Enhanced the scheduling of the pull functions on init
+- Improved webhook parsing functions performance
+- Fixed a bug preventing the `gitlab_ci_pipeline_run_count` from being initialized correctly at startup
+- Fixed the `gitlab_ci_pipeline_job_run_count` and `gitlab_ci_pipeline_run_count` metrics incrementing algorithm
+- Improved the `pipelines` grafana dashboard
+- Fixed a bug which could lead to an overwrite of the refs and environments at scale, inducing unecessary GitLab API calls and discrepancy for some metrics
+- Optimized the storage layer implementation
+- Ensure group wildcards only returns projects belonging directly to the group
+
 ## [0.4.2] - 2020-10-22
 
 **BREAKING CHANGES**
@@ -402,7 +481,10 @@ if not seen in a long time.
 - LICENSE
 - README
 
-[Unreleased]: https://github.com/mvisonneau/gitlab-ci-pipelines-exporter/compare/0.4.1...HEAD
+[Unreleased]: https://github.com/mvisonneau/gitlab-ci-pipelines-exporter/compare/v0.4.4...HEAD
+[v0.4.4]: https://github.com/mvisonneau/gitlab-ci-pipelines-exporter/tree/v0.4.4
+[v0.4.3]: https://github.com/mvisonneau/gitlab-ci-pipelines-exporter/tree/v0.4.3
+[0.4.2]: https://github.com/mvisonneau/gitlab-ci-pipelines-exporter/tree/0.4.2
 [0.4.1]: https://github.com/mvisonneau/gitlab-ci-pipelines-exporter/tree/0.4.1
 [0.4.0]: https://github.com/mvisonneau/gitlab-ci-pipelines-exporter/tree/0.4.0
 [0.3.5]: https://github.com/mvisonneau/gitlab-ci-pipelines-exporter/tree/0.3.5

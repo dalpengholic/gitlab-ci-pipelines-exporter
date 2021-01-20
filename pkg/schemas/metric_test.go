@@ -8,12 +8,32 @@ import (
 )
 
 func TestMetricKey(t *testing.T) {
-	m := Metric{
+	assert.Equal(t, MetricKey("3273426995"), Metric{
 		Kind: MetricKindCoverage,
 		Labels: prometheus.Labels{
 			"foo": "bar",
 		},
-	}
+	}.Key())
 
-	assert.Equal(t, MetricKey("2152003002"), m.Key())
+	assert.Equal(t, MetricKey("77312310"), Metric{
+		Kind: MetricKindEnvironmentInformation,
+		Labels: prometheus.Labels{
+			"project":     "foo",
+			"environment": "bar",
+			"foo":         "bar",
+		},
+	}.Key())
+
+	assert.Equal(t, MetricKey("77312310"), Metric{
+		Kind: MetricKindEnvironmentInformation,
+		Labels: prometheus.Labels{
+			"project":     "foo",
+			"environment": "bar",
+			"bar":         "baz",
+		},
+	}.Key())
+
+	assert.Equal(t, MetricKey("1288741005"), Metric{
+		Kind: MetricKindEnvironmentInformation,
+	}.Key())
 }

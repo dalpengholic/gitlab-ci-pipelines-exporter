@@ -37,16 +37,38 @@ func TestGetProjectBranches(t *testing.T) {
 			w.WriteHeader(http.StatusNotFound)
 		})
 
-	branches, err := c.GetProjectBranches(1, "^(main)$")
+	branches, err := c.GetProjectBranches("1", "^(main)$", 0)
 	assert.NoError(t, err)
 	assert.Len(t, branches, 1)
 	assert.Equal(t, "main", branches[0])
 
 	// Test invalid project id
-	_, err = c.GetProjectBranches(0, "")
+	_, err = c.GetProjectBranches("0", "", 0)
 	assert.Error(t, err)
 
 	// Test invalid regexp
-	_, err = c.GetProjectBranches(0, "[")
+	_, err = c.GetProjectBranches("0", "[", 0)
 	assert.Error(t, err)
+}
+
+func TestGetBranchLatestCommit(t *testing.T) {
+	mux, server, c := getMockedClient()
+	defer server.Close()
+
+	mux.HandleFunc("/api/v4/projects/1/repository/branches/main",
+		func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, r.Method, "GET")
+			fmt.Fprint(w, `
+{
+	"commit": {
+		"short_id": "7b5c3cc",
+		"committed_date": "2019-03-25T18:55:13.252Z"
+	}
+}`)
+		})
+
+	commitShortID, commitCreatedAt, err := c.GetBranchLatestCommit("1", "main")
+	assert.NoError(t, err)
+	assert.Equal(t, "7b5c3cc", commitShortID)
+	assert.Equal(t, float64(1553540113), commitCreatedAt)
 }

@@ -2,40 +2,44 @@ package exporter
 
 import (
 	"context"
+	"strings"
 
 	"github.com/mvisonneau/gitlab-ci-pipelines-exporter/pkg/schemas"
 	log "github.com/sirupsen/logrus"
 )
 
-func getProjectRefs(
-	projectID int,
-	refsRegexp string,
+func getRefs(
+	projectName string,
+	filterRegexp string,
+	maxAgeSeconds uint,
 	fetchMergeRequestsPipelinesRefs bool,
-	fetchMergeRequestsPipelinesRefsInitLimit int) (map[string]schemas.ProjectRefKind, error) {
+	fetchMergeRequestsPipelinesRefsInitLimit int) (map[string]schemas.RefKind, error) {
+	cfgUpdateLock.RLock()
+	defer cfgUpdateLock.RUnlock()
 
-	branches, err := gitlabClient.GetProjectBranches(projectID, refsRegexp)
+	branches, err := gitlabClient.GetProjectBranches(projectName, filterRegexp, maxAgeSeconds)
 	if err != nil {
 		return nil, err
 	}
 
-	tags, err := gitlabClient.GetProjectTags(projectID, refsRegexp)
+	tags, err := gitlabClient.GetProjectTags(projectName, filterRegexp, maxAgeSeconds)
 	if err != nil {
 		return nil, err
 	}
 
 	mergeRequests := []string{}
 	if fetchMergeRequestsPipelinesRefs {
-		mergeRequests, err = gitlabClient.GetProjectMergeRequestsPipelines(projectID, fetchMergeRequestsPipelinesRefsInitLimit)
+		mergeRequests, err = gitlabClient.GetProjectMergeRequestsPipelines(projectName, fetchMergeRequestsPipelinesRefsInitLimit, maxAgeSeconds)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	foundRefs := map[string]schemas.ProjectRefKind{}
-	for kind, refs := range map[schemas.ProjectRefKind][]string{
-		schemas.ProjectRefKindBranch:       branches,
-		schemas.ProjectRefKindTag:          tags,
-		schemas.ProjectRefKindMergeRequest: mergeRequests,
+	foundRefs := map[string]schemas.RefKind{}
+	for kind, refs := range map[schemas.RefKind][]string{
+		schemas.RefKindBranch:       branches,
+		schemas.RefKindTag:          tags,
+		schemas.RefKindMergeRequest: mergeRequests,
 	} {
 		for _, ref := range refs {
 			if _, ok := foundRefs[ref]; ok {
@@ -48,49 +52,65 @@ func getProjectRefs(
 	return foundRefs, nil
 }
 
-func pullProjectRefsFromProject(p schemas.Project) error {
+func pullRefsFromProject(p schemas.Project) error {
+	cfgUpdateLock.RLock()
+	defer cfgUpdateLock.RUnlock()
+
 	gp, err := gitlabClient.GetProject(p.Name)
 	if err != nil {
 		return err
 	}
 
-	refs, err := getProjectRefs(
-		gp.ID,
+	refs, err := getRefs(
+		p.Name,
 		p.Pull.Refs.Regexp(),
+		p.Pull.Refs.MaxAgeSeconds(),
 		p.Pull.Refs.From.MergeRequests.Enabled(),
 		p.Pull.Refs.From.MergeRequests.Depth(),
 	)
-
 	if err != nil {
 		return err
 	}
 
 	for ref, kind := range refs {
-		pr := schemas.NewProjectRef(p, gp, ref, kind)
-		projectRefExists, err := store.ProjectRefExists(pr.Key())
+		ref := schemas.NewRef(
+			kind,
+			p.Name,
+			ref,
+			strings.Join(gp.TagList, ","),
+			p.OutputSparseStatusMetrics(),
+			p.Pull.Pipeline.Jobs.Enabled(),
+			p.Pull.Pipeline.Jobs.FromChildPipelines.Enabled(),
+			p.Pull.Pipeline.Variables.Enabled(),
+			p.Pull.Pipeline.Variables.Regexp(),
+		)
+
+		refExists, err := store.RefExists(ref.Key())
 		if err != nil {
 			return err
 		}
 
-		if !projectRefExists {
+		if !refExists {
 			log.WithFields(log.Fields{
-				"project-id":       gp.ID,
-				"project-name":     gp.PathWithNamespace,
-				"project-ref":      ref,
-				"project-ref-kind": kind,
-			}).Info("discovered new project ref")
+				"project-name": ref.ProjectName,
+				"ref":          ref.Name,
+				"ref-kind":     ref.Kind,
+			}).Info("discovered new ref")
 
-			if err = store.SetProjectRef(pr); err != nil {
+			if err = store.SetRef(ref); err != nil {
 				return err
 			}
 
-			go schedulePullProjectRefMetrics(context.Background(), pr)
+			go schedulePullRefMetrics(context.Background(), ref)
 		}
 	}
 	return nil
 }
 
-func pullProjectRefsFromPipelines(p schemas.Project) error {
+func pullRefsFromPipelines(p schemas.Project) error {
+	cfgUpdateLock.RLock()
+	defer cfgUpdateLock.RUnlock()
+
 	log.WithFields(log.Fields{
 		"init-operation": true,
 		"project-name":   p.Name,
@@ -101,31 +121,30 @@ func pullProjectRefsFromPipelines(p schemas.Project) error {
 		return err
 	}
 
-	projectRefs, err := gitlabClient.GetProjectRefsFromPipelines(p, gp)
+	refs, err := gitlabClient.GetRefsFromPipelines(p, strings.Join(gp.TagList, ","))
 	if err != nil {
 		return err
 	}
 
 	// Immediately trigger a pull of the ref
-	for _, pr := range projectRefs {
-		projectRefExists, err := store.ProjectRefExists(pr.Key())
+	for _, ref := range refs {
+		refExists, err := store.RefExists(ref.Key())
 		if err != nil {
 			return err
 		}
 
-		if !projectRefExists {
+		if !refExists {
 			log.WithFields(log.Fields{
-				"project-id":       gp.ID,
-				"project-name":     gp.PathWithNamespace,
-				"project-ref":      pr.Ref,
-				"project-ref-kind": pr.Kind,
-			}).Info("discovered new project ref from pipelines")
+				"project-name": ref.ProjectName,
+				"ref":          ref.Name,
+				"ref-kind":     ref.Kind,
+			}).Info("discovered new ref from pipelines")
 
-			if err = store.SetProjectRef(pr); err != nil {
+			if err = store.SetRef(ref); err != nil {
 				return err
 			}
 
-			go schedulePullProjectRefMetrics(context.Background(), pr)
+			go schedulePullRefMetrics(context.Background(), ref)
 		}
 	}
 	return nil

@@ -6,57 +6,52 @@ import (
 	"testing"
 
 	"github.com/mvisonneau/gitlab-ci-pipelines-exporter/pkg/schemas"
-	"github.com/openlyinc/pointy"
 	"github.com/stretchr/testify/assert"
-	"github.com/xanzy/go-gitlab"
 )
 
-func TestPullProjectRefMetricsSucceed(t *testing.T) {
+func TestPullRefMetricsSucceed(t *testing.T) {
 	resetGlobalValues()
 	mux, server := configureMockedGitlabClient()
 	defer server.Close()
 
-	mux.HandleFunc("/api/v4/projects/1/pipelines",
+	mux.HandleFunc("/api/v4/projects/foo/pipelines",
 		func(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprint(w, `[{"id":1}]`)
 		})
 
-	mux.HandleFunc("/api/v4/projects/1/pipelines/1",
+	mux.HandleFunc("/api/v4/projects/foo/pipelines/1",
 		func(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprint(w, `{"id":1,"updated_at":"2016-08-11T11:28:34.085Z","duration":300,"status":"running","coverage":"30.2"}`)
 		})
 
-	mux.HandleFunc(fmt.Sprintf("/api/v4/projects/1/pipelines/1/variables"),
+	mux.HandleFunc(fmt.Sprintf("/api/v4/projects/foo/pipelines/1/variables"),
 		func(w http.ResponseWriter, r *http.Request) {
 			assert.Equal(t, "GET", r.Method)
 			fmt.Fprint(w, `[{"key":"foo","value":"bar"}]`)
 		})
 
-	pr := schemas.ProjectRef{
-		Kind:              schemas.ProjectRefKindBranch,
-		ID:                1,
-		PathWithNamespace: "foo/bar",
-		Ref:               "baz",
-	}
-	pr.Pull.Pipeline.Variables.EnabledValue = pointy.Bool(true)
-
 	// Metrics pull shall succeed
-	assert.NoError(t, pullProjectRefMetrics(pr))
+	assert.NoError(t, pullRefMetrics(schemas.Ref{
+		Kind:                         schemas.RefKindBranch,
+		ProjectName:                  "foo",
+		Name:                         "bar",
+		PullPipelineVariablesEnabled: true,
+	}))
 
 	// Check if all the metrics exist
 	metrics, _ := store.Metrics()
 	labels := map[string]string{
-		"project":   "foo/bar",
+		"kind":      string(schemas.RefKindBranch),
+		"project":   "foo",
+		"ref":       "bar",
 		"topics":    "",
-		"ref":       "baz",
-		"kind":      string(schemas.ProjectRefKindBranch),
 		"variables": "foo:bar",
 	}
 
 	runCount := schemas.Metric{
 		Kind:   schemas.MetricKindRunCount,
 		Labels: labels,
-		Value:  1,
+		Value:  0,
 	}
 	assert.Equal(t, runCount, metrics[runCount.Key()])
 
@@ -83,13 +78,15 @@ func TestPullProjectRefMetricsSucceed(t *testing.T) {
 	assert.Equal(t, status, metrics[status.Key()])
 }
 
-func TestPullProjectRefMetricsMergeRequestPipeline(t *testing.T) {
-	pr := schemas.ProjectRef{
-		Kind: schemas.ProjectRefKindMergeRequest,
-		MostRecentPipeline: &gitlab.Pipeline{
+func TestPullRefMetricsMergeRequestPipeline(t *testing.T) {
+	resetGlobalValues()
+	ref := schemas.Ref{
+		Kind: schemas.RefKindMergeRequest,
+		LatestPipeline: schemas.Pipeline{
+			ID:     1,
 			Status: "success",
 		},
 	}
 
-	assert.NoError(t, pullProjectRefMetrics(pr))
+	assert.NoError(t, pullRefMetrics(ref))
 }

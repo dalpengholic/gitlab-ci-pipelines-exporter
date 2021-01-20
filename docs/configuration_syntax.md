@@ -86,6 +86,19 @@ pull:
     # from wildcards (optional, default: 1800)
     interval_seconds: 1800
 
+  environments_from_projects:
+    # Whether to trigger a discovery of project environments when
+    # exporter starts (optional, default: true)
+    on_init: true
+
+    # Whether to attempt retrieving project environments
+    # on a regular basis (optional, default: true)
+    scheduled: true
+
+    # Interval in seconds to discover project environments
+    # (optional, default: 300)
+    interval_seconds: 300
+
   refs_from_projects:
     # Whether to trigger a discovery of project refs from
     # branches, tags and merge requests when the
@@ -129,6 +142,19 @@ garbage_collect:
     # (optional, default: 14400)
     interval_seconds: 14400
 
+  environments:
+    # Whether or not to trigger a garbage collection of the
+    # environments when the exporter starts (optional, default: false)
+    on_init: false
+
+    # Whether or not to attempt garbage collecting the environments
+    # on a regular basis (optional, default: true)
+    scheduled: true
+
+    # Interval in seconds to garbage collect environments
+    # (optional, default: 14400)
+    interval_seconds: 14400
+
   refs:
     # Whether or not to trigger a garbage collection of the
     # projects refs when the exporter starts (optional, default: false)
@@ -164,10 +190,30 @@ project_defaults:
   output_sparse_status_metrics: true
 
   pull:
+    environments:
+      # Whether or not to pull project environments & their deployments
+      # (optional, default: false)
+      enabled: false
+
+      # Filter out by name environments to include
+      # (optional, default: ".*")
+      name_regexp: ".*"
+
+      # When deployments are based upon tags, you can
+      # choose to filter out the ones which you are
+      # using to deploy your environment (optional, default: ".*")
+      tags_regexp: ".*"
+
     refs:
       # Filter refs (branches/tags only) to include
       # (optional, default: "^main|master$" -- main or master branch)
       regexp: "^main|master$"
+
+      # If the age of the most recent commit for the ref is greater than
+      # this value, the ref won't get exported (optional, default: 0 (disabled))
+      # nb: when used in conjuction of pull.from.(pipelines|merge_requests).enabled = true, the creation date
+      # of the pipeline is taken in account, not the age of the commit
+      max_age_seconds: 0
 
       from:
         pipelines:
@@ -197,6 +243,11 @@ project_defaults:
         # (optional, default: false)
         enabled: false
 
+        from_child_pipelines:
+          # Collect jobs from subsequent child/downstream pipelines
+          # (optional, default: true)
+          enabled: true
+
       variables:
         # Fetch pipeline variables in a separate metric (optional, default: false)
         enabled: false
@@ -213,10 +264,30 @@ projects:
 
     # Here are all the project parameters which can be overriden (optional)
     pull:
+      environments:
+        # Whether or not to pull project environments & their deployments
+        # (optional, default: false)
+        enabled: false
+
+        # Filter out by name environments to include
+        # (optional, default: ".*")
+        name_regexp: ".*"
+
+        # When deployments are based upon tags, you can
+        # choose to filter out the ones which you are
+        # using to deploy your environment (optional, default: ".*")
+        tags_regexp: ".*"
+  
       refs:
         # Filter refs (branches/tags only) to include
         # (optional, default: "^main|master$" -- main or master branch)
         regexp: "^main|master$"
+
+        # If the age of the most recent commit for the ref is greater than
+        # this value, the ref won't get exported (optional, default: 0 (disabled))
+        # nb: when used in conjuction of pull.from.(pipelines|merge_requests).enabled = true, the creation date
+        # of the pipeline is taken in account, not the age of the commit
+        max_age_seconds: 0
 
         from:
           pipelines:
@@ -245,6 +316,11 @@ projects:
           # Increases the number of outputed metrics significantly!
           # (optional, default: false)
           enabled: false
+
+          from_child_pipelines:
+            # Collect jobs from subsequent child/downstream pipelines
+            # (optional, default: true)
+            enabled: true
 
         variables:
           # Fetch pipeline variables in a separate metric (optional, default: false)
@@ -278,10 +354,30 @@ wildcards:
 
     # Here are all the project parameters which can be overriden (optional)
     pull:
+      environments:
+        # Whether or not to pull project environments & their deployments
+        # (optional, default: false)
+        enabled: false
+
+        # Filter out by name environments to include
+        # (optional, default: ".*")
+        name_regexp: ".*"
+
+        # When deployments are based upon tags, you can
+        # choose to filter out the ones which you are
+        # using to deploy your environment (optional, default: ".*")
+        tags_regexp: ".*"
+
       refs:
         # Filter refs (branches/tags only) to include
         # (optional, default: "^main|master$" -- main or master branch)
         regexp: "^main|master$"
+
+        # If the age of the most recent commit for the ref is greater than
+        # this value, the ref won't get exported (optional, default: 0 (disabled))
+        # nb: when used in conjuction of pull.from.(pipelines|merge_requests).enabled = true, the creation date
+        # of the pipeline is taken in account, not the age of the commit
+        max_age_seconds: 0
 
         from:
           pipelines:
@@ -293,7 +389,7 @@ wildcards:
             enabled: false
 
             # Maximum number of pipelines to analyze per project
-            # to search for refs on init (optional, default: 100)
+            # to search for refs on init (optional, default: 100, min: 1, max: 100)
             depth: 100
 
           merge_requests:
@@ -310,6 +406,11 @@ wildcards:
           # Increases the number of outputed metrics significantly!
           # (optional, default: false)
           enabled: false
+
+          from_child_pipelines:
+            # Collect jobs from subsequent child/downstream pipelines
+            # (optional, default: true)
+            enabled: true
 
         variables:
           # Fetch pipeline variables in a separate metric (optional, default: false)
@@ -330,3 +431,12 @@ wildcards:
 ```
 
 The exporter will then search for all accessible projects and start pulling their metrics.
+
+## Using a forward proxy to reach GitLab's endpoints
+
+You can refer to the documentation of the [net/http package regarding ProxyFromEnvironment](https://godoc.org/net/http#ProxyFromEnvironment)
+
+```bash
+# eg:
+export HTTP_PROXY=http://10.x.x.x:3128
+```

@@ -4,147 +4,128 @@ import (
 	"fmt"
 	"net/http"
 	"testing"
-	"time"
 
 	"github.com/mvisonneau/gitlab-ci-pipelines-exporter/pkg/schemas"
-	"github.com/openlyinc/pointy"
 	"github.com/stretchr/testify/assert"
-	goGitlab "github.com/xanzy/go-gitlab"
 )
 
-func TestPullProjectRefPipelineJobsMetrics(t *testing.T) {
+func TestPullRefPipelineJobsMetrics(t *testing.T) {
 	resetGlobalValues()
 	mux, server := configureMockedGitlabClient()
 	defer server.Close()
 
-	mux.HandleFunc("/api/v4/projects/1/pipelines/1/jobs",
+	mux.HandleFunc("/api/v4/projects/foo/pipelines/1/jobs",
 		func(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprint(w, `[{"id":1,"created_at":"2016-08-11T11:28:34.085Z"},{"id":2,"created_at":"2016-08-11T11:28:34.085Z"}]`)
 		})
 
-	pr := schemas.ProjectRef{
-		ID:  1,
-		Ref: "foo",
-		MostRecentPipeline: &goGitlab.Pipeline{
+	ref := schemas.Ref{
+		ProjectName: "foo",
+		Name:        "bar",
+		LatestPipeline: schemas.Pipeline{
 			ID: 1,
 		},
-		Jobs: make(map[string]goGitlab.Job),
 	}
 
-	assert.NoError(t, pullProjectRefPipelineJobsMetrics(pr))
+	assert.NoError(t, pullRefPipelineJobsMetrics(ref))
 	server.Close()
-	assert.Error(t, pullProjectRefPipelineJobsMetrics(pr))
+	assert.Error(t, pullRefPipelineJobsMetrics(ref))
 }
 
-func TestPullProjectRefMostRecentJobsMetrics(t *testing.T) {
+func TestPullRefMostRecentJobsMetrics(t *testing.T) {
 	resetGlobalValues()
 	mux, server := configureMockedGitlabClient()
 	defer server.Close()
 
-	mux.HandleFunc("/api/v4/projects/1/jobs",
+	mux.HandleFunc("/api/v4/projects/foo/jobs",
 		func(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprint(w, `[{"id":1,"created_at":"2016-08-11T11:28:34.085Z"},{"id":2,"created_at":"2016-08-11T11:28:34.085Z"}]`)
 		})
 
-	pr := schemas.ProjectRef{
-		ID:  1,
-		Ref: "foo",
-		Jobs: map[string]goGitlab.Job{
-			"foo": {
+	ref := schemas.Ref{
+		ProjectName: "foo",
+		Name:        "bar",
+		LatestJobs: schemas.Jobs{
+			"bar": {
 				ID: 1,
 			},
 		},
 	}
 
 	// Test with FetchPipelineJobMetrics disabled
-	assert.NoError(t, pullProjectRefMostRecentJobsMetrics(pr))
+	assert.NoError(t, pullRefMostRecentJobsMetrics(ref))
 
 	// Enable FetchPipelineJobMetrics
-	pr.Pull.Pipeline.Jobs.EnabledValue = pointy.Bool(true)
-	assert.NoError(t, pullProjectRefMostRecentJobsMetrics(pr))
+	ref.PullPipelineJobsEnabled = true
+	assert.NoError(t, pullRefMostRecentJobsMetrics(ref))
 	server.Close()
-	assert.Error(t, pullProjectRefMostRecentJobsMetrics(pr))
+	assert.Error(t, pullRefMostRecentJobsMetrics(ref))
 }
 
 func TestProcessJobMetrics(t *testing.T) {
 	resetGlobalValues()
 
-	now := time.Now()
-	oneDayAgo := now.Add(-24 * time.Hour)
-	oldJob := goGitlab.Job{
+	oldJob := schemas.Job{
 		ID:        1,
 		Name:      "foo",
-		CreatedAt: &oneDayAgo,
+		Timestamp: 1,
 	}
 
-	newJob := goGitlab.Job{
-		ID:        2,
-		Name:      "foo",
-		CreatedAt: &now,
-		Duration:  15,
-		Status:    "failed",
-		Stage:     "🚀",
-		Artifacts: []struct {
-			FileType   string "json:\"file_type\""
-			Filename   string "json:\"filename\""
-			Size       int    "json:\"size\""
-			FileFormat string "json:\"file_format\""
-		}{
-			{
-				Size: 100,
-			},
-			{
-				Size: 50,
-			},
+	newJob := schemas.Job{
+		ID:              2,
+		Name:            "foo",
+		Timestamp:       2,
+		DurationSeconds: 15,
+		Status:          "failed",
+		Stage:           "🚀",
+		ArtifactSize:    150,
+		Runner: schemas.Runner{
+			Description: "xxx",
 		},
 	}
 
-	pr := schemas.ProjectRef{
-		ID:                1,
-		PathWithNamespace: "foo/bar",
-		Topics:            "first,second",
-		Kind:              schemas.ProjectRefKindBranch,
-		Ref:               "foo",
-		Jobs: map[string]goGitlab.Job{
+	ref := schemas.Ref{
+		ProjectName: "foo/bar",
+		Topics:      "first,second",
+		Kind:        schemas.RefKindBranch,
+		Name:        "foo",
+		LatestPipeline: schemas.Pipeline{
+			ID:        1,
+			Variables: "none",
+		},
+		LatestJobs: schemas.Jobs{
 			"foo": oldJob,
 		},
-		MostRecentPipeline: &goGitlab.Pipeline{
-			ID: 1,
-		},
-		MostRecentPipelineVariables: "none",
-		Project: schemas.Project{
-			ProjectParameters: schemas.ProjectParameters{
-				OutputSparseStatusMetricsValue: pointy.Bool(true),
-			},
-		},
+		OutputSparseStatusMetrics: true,
 	}
 
-	store.SetProjectRef(pr)
+	store.SetRef(ref)
 
 	// If we run it against the same job, nothing should change in the store
-	processJobMetrics(pr, oldJob)
-	prs, _ := store.ProjectsRefs()
-	assert.Equal(t, map[string]goGitlab.Job{
+	processJobMetrics(ref, oldJob)
+	refs, _ := store.Refs()
+	assert.Equal(t, schemas.Jobs{
 		"foo": oldJob,
-	}, prs[pr.Key()].Jobs)
+	}, refs[ref.Key()].LatestJobs)
 
-	// Update the project ref
-	processJobMetrics(pr, newJob)
-	prs, _ = store.ProjectsRefs()
-	assert.Equal(t, map[string]goGitlab.Job{
+	// Update the ref
+	processJobMetrics(ref, newJob)
+	refs, _ = store.Refs()
+	assert.Equal(t, schemas.Jobs{
 		"foo": newJob,
-	}, prs[pr.Key()].Jobs)
+	}, refs[ref.Key()].LatestJobs)
 
 	// Check if all the metrics exist
 	metrics, _ := store.Metrics()
 	labels := map[string]string{
-		"project":   pr.PathWithNamespace,
-		"topics":    pr.Topics,
-		"ref":       pr.Ref,
-		"kind":      string(pr.Kind),
-		"variables": pr.MostRecentPipelineVariables,
-		"stage":     newJob.Stage,
-		"job_name":  newJob.Name,
+		"project":            ref.ProjectName,
+		"topics":             ref.Topics,
+		"ref":                ref.Name,
+		"kind":               string(ref.Kind),
+		"variables":          ref.LatestPipeline.Variables,
+		"stage":              newJob.Stage,
+		"job_name":           newJob.Name,
+		"runner_description": newJob.Runner.Description,
 	}
 
 	lastJobRunID := schemas.Metric{
@@ -157,21 +138,21 @@ func TestProcessJobMetrics(t *testing.T) {
 	timeSinceLastJobRun := schemas.Metric{
 		Kind:   schemas.MetricKindJobTimestamp,
 		Labels: labels,
-		Value:  float64(now.Unix()),
+		Value:  2,
 	}
 	assert.Equal(t, timeSinceLastJobRun, metrics[timeSinceLastJobRun.Key()])
 
 	lastRunJobDuration := schemas.Metric{
 		Kind:   schemas.MetricKindJobDurationSeconds,
 		Labels: labels,
-		Value:  newJob.Duration,
+		Value:  newJob.DurationSeconds,
 	}
 	assert.Equal(t, lastRunJobDuration, metrics[lastRunJobDuration.Key()])
 
 	jobRunCount := schemas.Metric{
 		Kind:   schemas.MetricKindJobRunCount,
 		Labels: labels,
-		Value:  float64(1),
+		Value:  0,
 	}
 	assert.Equal(t, jobRunCount, metrics[jobRunCount.Key()])
 

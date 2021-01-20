@@ -3,7 +3,7 @@
 ## Requirements
 
 - **~5 min of your time**
-- A personal access token on [gitlab.com](https://docs.gitlab.com/ee/user/profile/personal_access_tokens.html) (or your own instance) with `read_repository` scope
+- A personal access token on [gitlab.com](https://docs.gitlab.com/ee/user/profile/personal_access_tokens.html) (or your own instance) with `read_api` scope
 - [git](https://git-scm.com/) & [docker-compose](https://docs.docker.com/compose/)
 
 ## 🚀
@@ -14,7 +14,7 @@
 ~$ cd gitlab-ci-pipelines-exporter/examples/quickstart
 
 # Provide your personal GitLab API access token (needs read_api permissions)
-~$ sed -i 's/<your_token>/xXF_xxjV_xxyzxzz' gitlab-ci-pipelines-exporter/config.yml
+~$ sed -i 's/<your_token>/xXF_xxjV_xxyzxzz/' gitlab-ci-pipelines-exporter/config.yml
 
 # Start gitlab-ci-pipelines-exporter, prometheus and grafana containers !
 ~$ docker-compose up -d
@@ -28,7 +28,7 @@ You should now have a stack completely configured and accessible at these locati
 
 - `gitlab-ci-pipelines-exporter`: [http://localhost:8080/metrics](http://localhost:8080/metrics)
 - `prometheus`: [http://localhost:9090](http://localhost:9090)
-- `grafana`: [http://localhost:3000/d/gitlab_ci_pipeline_last_run_statuses](localhost:3000/d/gitlab_ci_pipeline_last_run_statuses)
+- `grafana`: [http://localhost:3000](http://localhost:3000) (if you want/need to login, creds are _admin/admin_)
 
 ## Use and troubleshoot
 
@@ -57,17 +57,14 @@ time="2020-04-28T23:09:15Z" level=info msg="pulling metrics from projects refs" 
 ### Check we can fetch metrics from the exporter container
 
 ```bash
-~$ curl -s http://localhost:8080/metrics | grep project
-gitlab_ci_pipeline_last_run_duration_seconds{project="gitlab-org/charts/auto-deploy-app",ref="master"} 36
-gitlab_ci_pipeline_last_run_duration_seconds{project="gitlab-org/gitlab-runner",ref="master"} 3875
-gitlab_ci_pipeline_status{project="gitlab-org/charts/auto-deploy-app",ref="master",status="failed"} 0
-gitlab_ci_pipeline_status{project="gitlab-org/charts/auto-deploy-app",ref="master",status="running"} 0
-gitlab_ci_pipeline_status{project="gitlab-org/charts/auto-deploy-app",ref="master",status="success"} 1
-gitlab_ci_pipeline_status{project="gitlab-org/gitlab-runner",ref="master",status="failed"} 0
-gitlab_ci_pipeline_status{project="gitlab-org/gitlab-runner",ref="master",status="running"} 0
-gitlab_ci_pipeline_status{project="gitlab-org/gitlab-runner",ref="master",status="success"} 1
-gitlab_ci_pipeline_time_since_last_run_seconds{project="gitlab-org/charts/auto-deploy-app",ref="master"} 1.251363e+06
-gitlab_ci_pipeline_time_since_last_run_seconds{project="gitlab-org/gitlab-runner",ref="master"} 91799
+# How many metrics we can get
+~$ curl -s http://localhost:8080/metrics | grep project | wc -l
+     616
+
+# Some specific metrics
+~$ curl -s http://localhost:8080/metrics | grep project | grep gitlab_ci_pipeline_timestamp
+gitlab_ci_pipeline_timestamp{kind="branch",project="gitlab-org/charts/auto-deploy-app",ref="master",topics="",variables=""} 1.595330197e+09
+gitlab_ci_pipeline_timestamp{kind="branch",project="gitlab-org/gitlab-runner",ref="master",topics="",variables=""} 1.604520738e+09
 ```
 
 ### Checkout prometheus targets and available metrics
@@ -76,21 +73,35 @@ You can open this URL in your browser and should see the exporter is being confi
 
 [http://localhost:9090/targets](http://localhost:9090/targets)
 
-![prometheus_targets](/docs/images/prometheus_targets.png)
+![prometheus_targets](/docs/images/prometheus_targets_example.png)
 
-You should then be able to see that following metrics being displayed:
+You should then be able to see the following metrics under the `gitlab_ci_` prefix:
 
-[http://localhost:9090/graph?g0.range_input=1h&g0.expr=gitlab_ci_pipeline_status&g0.tab=1](http://localhost:9090/graph?g0.range_input=1h&g0.expr=gitlab_ci_pipeline_status&g0.tab=1)
+[http://localhost:9090/new/graph](http://localhost:9090/new/graph)
 
-![prometheus_metrics](/docs/images/prometheus_metrics.png)
+![prometheus_metrics_list](/docs/images/prometheus_metrics_list_example.png)
 
-### Checkout the grafana example dashboard
+You can then validate that you get the expected values for your projects metrics, eg `gitlab_ci_pipeline_status`:
 
-An example dashboard should be available at this address:
+[http://localhost:9090/new/graph?g0.expr=gitlab_ci_pipeline_status&g0.tab=1&g0.stacked=0&g0.range_input=1h](http://localhost:9090/new/graph?g0.expr=gitlab_ci_pipeline_status&g0.tab=1&g0.stacked=0&g0.range_input=1h)
 
-[http://localhost:3000/d/gitlab_ci_pipeline_statuses/gitlab-ci-pipelines-statuses](http://localhost:3000/d/gitlab_ci_pipeline_statuses/gitlab-ci-pipelines-statuses)
+![prometheus_pipeline_status_metric_example](/docs/images/prometheus_pipeline_status_metric_example.png)
 
-![grafana_dashboard_example](/docs/images/grafana_dashboard_example.png)
+### Checkout the grafana example dashboards
+
+Example dashboards should be available at these addresses:
+
+- **Pipelines dashboard** - [http://localhost:3000/d/gitlab_ci_pipelines](http://localhost:3000/d/gitlab_ci_pipelines)
+
+![grafana_dashboard_pipelines_example](/docs/images/grafana_dashboard_pipelines_example.png)
+
+- **Jobs dashboard** - [http://localhost:3000/d/gitlab_ci_jobs](http://localhost:3000/d/gitlab_ci_jobs)
+
+![grafana_dashboard_jobs_example](/docs/images/grafana_dashboard_jobs_example.png)
+
+- **Environments / Deployments dashboard** - [http://localhost:3000/d/gitlab_ci_environment_deployments](http://localhost:3000/d/gitlab_ci_environment_deployments)
+
+![grafana_dashboard_environments_example](/docs/images/grafana_dashboard_environments_example.png)
 
 ## Perform configuration changes
 

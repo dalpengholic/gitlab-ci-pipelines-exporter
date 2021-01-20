@@ -1,25 +1,47 @@
 package gitlab
 
 import (
+	"strings"
+
 	"github.com/mvisonneau/gitlab-ci-pipelines-exporter/pkg/schemas"
 	log "github.com/sirupsen/logrus"
 	goGitlab "github.com/xanzy/go-gitlab"
 )
 
-// ListProjectRefPipelineJobs ..
-func (c *Client) ListProjectRefPipelineJobs(pr schemas.ProjectRef) (jobs []goGitlab.Job, err error) {
-	var foundJobs []*goGitlab.Job
-	var resp *goGitlab.Response
-
-	if pr.MostRecentPipeline == nil {
+// ListRefPipelineJobs ..
+func (c *Client) ListRefPipelineJobs(ref schemas.Ref) (jobs []schemas.Job, err error) {
+	if ref.LatestPipeline == (schemas.Pipeline{}) {
 		log.WithFields(
 			log.Fields{
-				"project-id":  pr.ID,
-				"project-ref": pr.Ref,
+				"project-name": ref.ProjectName,
+				"ref":          ref.Name,
 			},
 		).Debug("most recent pipeline not defined, exiting..")
 		return
 	}
+
+	jobs, err = c.ListPipelineJobs(ref.ProjectName, ref.LatestPipeline.ID)
+	if err != nil {
+		return
+	}
+
+	if ref.PullPipelineJobsFromChildPipelinesEnabled {
+		var childJobs []schemas.Job
+		childJobs, err = c.ListPipelineChildJobs(ref.ProjectName, ref.LatestPipeline.ID)
+		if err != nil {
+			return
+		}
+
+		jobs = append(jobs, childJobs...)
+	}
+
+	return
+}
+
+// ListPipelineJobs ..
+func (c *Client) ListPipelineJobs(projectName string, pipelineID int) (jobs []schemas.Job, err error) {
+	var foundJobs []*goGitlab.Job
+	var resp *goGitlab.Response
 
 	options := &goGitlab.ListJobsOptions{
 		ListOptions: goGitlab.ListOptions{
@@ -30,24 +52,23 @@ func (c *Client) ListProjectRefPipelineJobs(pr schemas.ProjectRef) (jobs []goGit
 
 	for {
 		c.rateLimit()
-		foundJobs, resp, err = c.Jobs.ListPipelineJobs(pr.ID, pr.MostRecentPipeline.ID, options)
+		foundJobs, resp, err = c.Jobs.ListPipelineJobs(projectName, pipelineID, options)
 		if err != nil {
 			return
 		}
 
 		for _, job := range foundJobs {
-			jobs = append(jobs, *job)
+			jobs = append(jobs, schemas.NewJob(*job))
 		}
 
 		if resp.CurrentPage >= resp.TotalPages {
 			log.WithFields(
 				log.Fields{
-					"project-id":  pr.ID,
-					"project-ref": pr.Ref,
-					"pipeline-id": pr.MostRecentPipeline.ID,
-					"jobs-count":  resp.TotalItems,
+					"project-name": projectName,
+					"pipeline-id":  pipelineID,
+					"jobs-count":   resp.TotalItems,
 				},
-			).Info("found pipeline jobs")
+			).Debug("found pipeline jobs")
 			break
 		}
 
@@ -56,25 +77,9 @@ func (c *Client) ListProjectRefPipelineJobs(pr schemas.ProjectRef) (jobs []goGit
 	return
 }
 
-// ListProjectRefMostRecentJobs ..
-func (c *Client) ListProjectRefMostRecentJobs(pr schemas.ProjectRef) (jobs []goGitlab.Job, err error) {
-	if pr.Jobs == nil {
-		log.WithFields(
-			log.Fields{
-				"project-id":  pr.ID,
-				"project-ref": pr.Ref,
-			},
-		).Debug("no jobs are currently held in memory, exiting..")
-		return
-	}
-
-	// Deep copy of the pr.Jobs
-	jobsToRefresh := make(map[string]goGitlab.Job)
-	for k, v := range pr.Jobs {
-		jobsToRefresh[k] = v
-	}
-
-	var foundJobs []goGitlab.Job
+// ListPipelineBridges ..
+func (c *Client) ListPipelineBridges(projectName string, pipelineID int) (bridges []*goGitlab.Bridge, err error) {
+	var foundBridges []*goGitlab.Bridge
 	var resp *goGitlab.Response
 
 	options := &goGitlab.ListJobsOptions{
@@ -86,15 +91,106 @@ func (c *Client) ListProjectRefMostRecentJobs(pr schemas.ProjectRef) (jobs []goG
 
 	for {
 		c.rateLimit()
-		foundJobs, resp, err = c.Jobs.ListProjectJobs(pr.ID, options)
+		foundBridges, resp, err = c.Jobs.ListPipelineBridges(projectName, pipelineID, options)
+		if err != nil {
+			return
+		}
+
+		bridges = append(bridges, foundBridges...)
+
+		if resp.CurrentPage >= resp.TotalPages {
+			log.WithFields(
+				log.Fields{
+					"project-name":  projectName,
+					"pipeline-id":   pipelineID,
+					"bridges-count": resp.TotalItems,
+				},
+			).Debug("found pipeline bridges")
+			break
+		}
+
+		options.Page = resp.NextPage
+	}
+	return
+}
+
+// ListPipelineChildJobs ..
+func (c *Client) ListPipelineChildJobs(projectName string, parentPipelineID int) (jobs []schemas.Job, err error) {
+	pipelineIDs := []int{parentPipelineID}
+
+	for {
+		if len(pipelineIDs) == 0 {
+			return
+		}
+
+		pipelineID := pipelineIDs[len(pipelineIDs)-1]
+		pipelineIDs = pipelineIDs[:len(pipelineIDs)-1]
+
+		var foundBridges []*goGitlab.Bridge
+		foundBridges, err = c.ListPipelineBridges(projectName, pipelineID)
+		if err != nil {
+			return
+		}
+
+		for _, foundBridge := range foundBridges {
+			// Trigger job was created but not yet executed
+			// so downstream pipeline is not yet scheduled to start.
+			// Therefore no pipeline is available and bridge could be skipped.
+			if foundBridge.DownstreamPipeline == nil {
+				continue
+			}
+
+			pipelineIDs = append(pipelineIDs, foundBridge.DownstreamPipeline.ID)
+			var foundJobs []schemas.Job
+			foundJobs, err = c.ListPipelineJobs(projectName, foundBridge.DownstreamPipeline.ID)
+			if err != nil {
+				return
+			}
+
+			jobs = append(jobs, foundJobs...)
+		}
+	}
+}
+
+// ListRefMostRecentJobs ..
+func (c *Client) ListRefMostRecentJobs(ref schemas.Ref) (jobs []schemas.Job, err error) {
+	if len(ref.LatestJobs) == 0 {
+		log.WithFields(
+			log.Fields{
+				"project-name": ref.ProjectName,
+				"ref":          ref.Name,
+			},
+		).Debug("no jobs are currently held in memory, exiting..")
+		return
+	}
+
+	// Deep copy of the ref.Jobs
+	jobsToRefresh := make(schemas.Jobs)
+	for k, v := range ref.LatestJobs {
+		jobsToRefresh[k] = v
+	}
+
+	var foundJobs []*goGitlab.Job
+	var resp *goGitlab.Response
+
+	options := &goGitlab.ListJobsOptions{
+		ListOptions: goGitlab.ListOptions{
+			Page:    1,
+			PerPage: 100,
+		},
+	}
+
+	for {
+		c.rateLimit()
+		foundJobs, resp, err = c.Jobs.ListProjectJobs(ref.ProjectName, options)
 		if err != nil {
 			return
 		}
 
 		for _, job := range foundJobs {
 			if _, ok := jobsToRefresh[job.Name]; ok {
-				if pr.Ref == job.Ref {
-					jobs = append(jobs, job)
+				if ref.Name == job.Ref {
+					jobs = append(jobs, schemas.NewJob(*job))
 					delete(jobsToRefresh, job.Name)
 				}
 			}
@@ -102,23 +198,29 @@ func (c *Client) ListProjectRefMostRecentJobs(pr schemas.ProjectRef) (jobs []goG
 			if len(jobsToRefresh) == 0 {
 				log.WithFields(
 					log.Fields{
-						"project-id":  pr.ID,
-						"project-ref": pr.Ref,
-						"jobs-count":  len(pr.Jobs),
+						"project-name": ref.ProjectName,
+						"ref":          ref.Name,
+						"jobs-count":   len(ref.LatestJobs),
 					},
-				).Info("found all jobs to refresh")
+				).Debug("found all jobs to refresh")
 				return
 			}
 		}
 
 		if resp.CurrentPage >= resp.TotalPages {
+			var notFoundJobs []string
+			for k := range jobsToRefresh {
+				notFoundJobs = append(notFoundJobs, k)
+			}
+
 			log.WithFields(
 				log.Fields{
-					"project-id":  pr.ID,
-					"project-ref": pr.Ref,
-					"jobs-count":  resp.TotalItems,
+					"project-name":   ref.ProjectName,
+					"ref":            ref.Name,
+					"jobs-count":     resp.TotalItems,
+					"not-found-jobs": strings.Join(notFoundJobs, ","),
 				},
-			).Warn("found some project ref jobs but did not manage to refresh all jobs which were in memory")
+			).Warn("found some ref jobs but did not manage to refresh all jobs which were in memory")
 			break
 		}
 

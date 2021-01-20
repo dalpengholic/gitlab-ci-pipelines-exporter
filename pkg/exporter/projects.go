@@ -8,6 +8,9 @@ import (
 )
 
 func pullProjectsFromWildcard(w schemas.Wildcard) error {
+	cfgUpdateLock.RLock()
+	defer cfgUpdateLock.RUnlock()
+
 	foundProjects, err := gitlabClient.ListProjects(w)
 	if err != nil {
 		return err
@@ -33,10 +36,9 @@ func pullProjectsFromWildcard(w schemas.Wildcard) error {
 				log.Errorf(err.Error())
 			}
 
-			go schedulePullProjectRefsFromProject(context.Background(), p)
-			if p.Pull.Refs.From.Pipelines.Enabled() {
-				go schedulePullProjectRefsFromPipeline(context.Background(), p)
-			}
+			go schedulePullRefsFromProject(context.Background(), p)
+			go schedulePullRefsFromPipeline(context.Background(), p)
+			go schedulePullEnvironmentsFromProject(context.Background(), p)
 		}
 	}
 	return nil

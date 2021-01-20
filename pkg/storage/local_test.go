@@ -61,63 +61,57 @@ func TestLocalProjectFunctions(t *testing.T) {
 	assert.NotEqual(t, p, newProject)
 }
 
-func TestLocalProjectRefFunctions(t *testing.T) {
-	pr := schemas.ProjectRef{
-		Project: schemas.Project{
-			Name: "foo/bar",
-		},
-		Ref:    "sweet",
-		Topics: "salty",
+func TestLocalEnvironmentFunctions(t *testing.T) {
+	environment := schemas.Environment{
+		ProjectName: "foo",
+		ID:          1,
 	}
 
 	l := NewLocalStorage()
-	l.SetProjectRef(pr)
+	l.SetEnvironment(environment)
 
 	// Set project
-	projectsRefs, err := l.ProjectsRefs()
+	environments, err := l.Environments()
 	assert.NoError(t, err)
-	assert.Contains(t, projectsRefs, pr.Key())
-	assert.Equal(t, pr, projectsRefs[pr.Key()])
+	assert.Contains(t, environments, environment.Key())
+	assert.Equal(t, environment, environments[environment.Key()])
 
-	// ProjectRef exists
-	exists, err := l.ProjectRefExists(pr.Key())
+	// Environment exists
+	exists, err := l.EnvironmentExists(environment.Key())
 	assert.NoError(t, err)
 	assert.True(t, exists)
 
-	// GetProjectRef should succeed
-	newProjectRef := schemas.ProjectRef{
-		Project: schemas.Project{
-			Name: "foo/bar",
-		},
-		Ref: "sweet",
+	// GetEnvironment should succeed
+	newEnvironment := schemas.Environment{
+		ProjectName: "foo",
+		ID:          1,
 	}
-	assert.NoError(t, l.GetProjectRef(&newProjectRef))
-	assert.Equal(t, pr, newProjectRef)
+	assert.NoError(t, l.GetEnvironment(&newEnvironment))
+	assert.Equal(t, environment, newEnvironment)
 
 	// Count
-	count, err := l.ProjectsRefsCount()
+	count, err := l.EnvironmentsCount()
 	assert.NoError(t, err)
 	assert.Equal(t, int64(1), count)
 
-	// Delete ProjectRef
-	l.DelProjectRef(pr.Key())
-	projectsRefs, err = l.ProjectsRefs()
+	// Delete Environment
+	l.DelEnvironment(environment.Key())
+	environments, err = l.Environments()
 	assert.NoError(t, err)
-	assert.NotContains(t, projectsRefs, pr.Key())
+	assert.NotContains(t, environments, environment.Key())
 
-	exists, err = l.ProjectRefExists(pr.Key())
+	exists, err = l.EnvironmentExists(environment.Key())
 	assert.NoError(t, err)
 	assert.False(t, exists)
 
-	// GetProjectRef should not update the var this time
-	newProjectRef = schemas.ProjectRef{
-		Project: schemas.Project{
-			Name: "foo/bar",
-		},
-		Ref: "sweet",
+	// GetEnvironment should not update the var this time
+	newEnvironment = schemas.Environment{
+		ProjectName: "foo",
+		ID:          1,
+		ExternalURL: "foo",
 	}
-	assert.NoError(t, l.GetProjectRef(&newProjectRef))
-	assert.NotEqual(t, pr, newProjectRef)
+	assert.NoError(t, l.GetEnvironment(&newEnvironment))
+	assert.NotEqual(t, environment, newEnvironment)
 }
 
 func TestLocalMetricFunctions(t *testing.T) {

@@ -1,5 +1,4 @@
 NAME          := gitlab-ci-pipelines-exporter
-VERSION       := $(shell git describe --tags --abbrev=1)
 FILES         := $(shell git ls-files */*.go)
 REPOSITORY    := mvisonneau/$(NAME)
 .DEFAULT_GOAL := help
@@ -9,7 +8,7 @@ export GO111MODULE=on
 .PHONY: setup
 setup: ## Install required libraries/tools for build tasks
 	@command -v cover 2>&1 >/dev/null       || GO111MODULE=off go get -u -v golang.org/x/tools/cmd/cover
-	@command -v goimports 2>&1 >/dev/null   || GO111MODULE=off go get -u -v golang.org/x/tools/cmd/goimports
+	@command -v gofumpt 2>&1 >/dev/null     || GO111MODULE=off go get -u -v mvdan.cc/gofumpt
 	@command -v gosec 2>&1 >/dev/null       || GO111MODULE=off go get -u -v github.com/securego/gosec/cmd/gosec
 	@command -v goveralls 2>&1 >/dev/null   || GO111MODULE=off go get -u -v github.com/mattn/goveralls
 	@command -v ineffassign 2>&1 >/dev/null || GO111MODULE=off go get -u -v github.com/gordonklaus/ineffassign
@@ -18,10 +17,10 @@ setup: ## Install required libraries/tools for build tasks
 
 .PHONY: fmt
 fmt: setup ## Format source code
-	goimports -w $(FILES)
+	gofumpt -w $(FILES)
 
 .PHONY: lint
-lint: revive vet goimports ineffassign misspell gosec ## Run all lint related tests against the codebase
+lint: revive vet gofumpt ineffassign misspell gosec ## Run all lint related tests against the codebase
 
 .PHONY: revive
 revive: setup ## Test code syntax with revive
@@ -31,14 +30,14 @@ revive: setup ## Test code syntax with revive
 vet: ## Test code syntax with go vet
 	go vet ./...
 
-.PHONY: goimports
-goimports: setup ## Test code syntax with goimports
-	goimports -d $(FILES) > goimports.out
-	@if [ -s goimports.out ]; then cat goimports.out; rm goimports.out; exit 1; else rm goimports.out; fi
+.PHONY: gofumpt
+gofumpt: setup ## Test code syntax with gofumpt
+	gofumpt -d $(FILES) > gofumpt.out
+	@if [ -s gofumpt.out ]; then cat gofumpt.out; rm gofumpt.out; exit 1; else rm gofumpt.out; fi
 
 .PHONY: ineffassign
 ineffassign: setup ## Test code syntax for ineffassign
-	ineffassign $(FILES)
+	ineffassign ./...
 
 .PHONY: misspell
 misspell: setup ## Test code with misspell
@@ -50,7 +49,7 @@ gosec: setup ## Test code for security vulnerabilities
 
 .PHONY: test
 test: ## Run the tests against the codebase
-	go test -v -count=1 ./...
+	go test -v -count=1 -race ./...
 
 .PHONY: install
 install: ## Build and install locally the binary (dev purpose)
@@ -64,17 +63,9 @@ build-local: ## Build the binaries using local GOOS
 build: ## Build the binaries
 	goreleaser release --snapshot --skip-publish --rm-dist
 
-.PHONY: build-linux-amd64
-build-linux-amd64: ## Build the binaries
-	goreleaser release --snapshot --skip-publish --rm-dist -f .goreleaser.linux-amd64.yml
-
 .PHONY: release
 release: ## Build & release the binaries
 	goreleaser release --rm-dist
-
-.PHONY: publish-coveralls
-publish-coveralls: setup ## Publish coverage results on coveralls
-	goveralls -service drone.io -coverprofile=coverage.out
 
 .PHONY: clean
 clean: ## Remove binary if it exists
@@ -83,7 +74,7 @@ clean: ## Remove binary if it exists
 .PHONY: coverage
 coverage: ## Generates coverage report
 	rm -rf *.out
-	go test -v ./... -coverpkg=./... -coverprofile=coverage.out
+	go test -count=1 -race -v ./... -coverpkg=./... -coverprofile=coverage.out
 
 .PHONY: coverage-html
 coverage-html: ## Generates coverage report and displays it in the browser
@@ -102,10 +93,6 @@ dev-env: ## Build a local development environment using Docker
 is-git-dirty: ## Tests if git is in a dirty state
 	@git status --porcelain
 	@test $(shell git status --porcelain | grep -c .) -eq 0
-
-.PHONY: sign-drone
-sign-drone: ## Sign Drone CI configuration
-	drone sign $(REPOSITORY) --save
 
 .PHONY: all
 all: lint test build coverage ## Test, builds and ship package for all supported platforms

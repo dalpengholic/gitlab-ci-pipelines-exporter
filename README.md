@@ -1,9 +1,9 @@
 # 🦊 gitlab-ci-pipelines-exporter
 
-[![GoDoc](https://godoc.org/github.com/mvisonneau/gitlab-ci-pipelines-exporter?status.svg)](https://pkg.go.dev/github.com/mvisonneau/gitlab-ci-pipelines-exporter?tab=overview)
+[![PkgGoDev](https://pkg.go.dev/badge/github.com/mvisonneau/gitlab-ci-pipelines-exporter)](https://pkg.go.dev/mod/github.com/mvisonneau/gitlab-ci-pipelines-exporter)
 [![Go Report Card](https://goreportcard.com/badge/github.com/mvisonneau/gitlab-ci-pipelines-exporter)](https://goreportcard.com/report/github.com/mvisonneau/gitlab-ci-pipelines-exporter)
 [![Docker Pulls](https://img.shields.io/docker/pulls/mvisonneau/gitlab-ci-pipelines-exporter.svg)](https://hub.docker.com/r/mvisonneau/gitlab-ci-pipelines-exporter/)
-[![Build Status](https://cloud.drone.io/api/badges/mvisonneau/gitlab-ci-pipelines-exporter/status.svg)](https://cloud.drone.io/mvisonneau/gitlab-ci-pipelines-exporter)
+[![Build Status](https://github.com/mvisonneau/gitlab-ci-pipelines-exporter/workflows/test/badge.svg?branch=main)](https://github.com/mvisonneau/gitlab-ci-pipelines-exporter/actions)
 [![Coverage Status](https://coveralls.io/repos/github/mvisonneau/gitlab-ci-pipelines-exporter/badge.svg?branch=main)](https://coveralls.io/github/mvisonneau/gitlab-ci-pipelines-exporter?branch=main)
 
 `gitlab-ci-pipelines-exporter` allows you to monitor your [GitLab CI pipelines](https://docs.gitlab.com/ee/ci/pipelines.html) with [Prometheus](https://prometheus.io/) or any monitoring solution supporting the [OpenMetrics](https://github.com/OpenObservability/OpenMetrics) format.
@@ -12,11 +12,27 @@ You can find more information [on GitLab docs](https://docs.gitlab.com/ee/ci/pip
 
 ## TL:DR
 
-Here is a [Grafana dashboard](https://grafana.com/grafana/dashboards/10620) I have been able to craft, using those metrics:
+Here are some [Grafana dashboards](https://grafana.com/grafana/dashboards/10620) I was able to craft using those metrics. Otherwise, the detailed list of **exported metrics** [is maintained here](docs/metrics.md).
 
-![grafana_dashboard](/docs/images/grafana_dashboard.png)
+### Pipelines
 
-If you are interested into trying it out, have a look into the [examples/quickstart](./examples/quickstart/README.md) folder which contains documentation to provision test version of the exporter, prometheus and also grafana in **~5min** using `docker-compose`
+![grafana_dashboard_pipelines](/docs/images/grafana_dashboard_pipelines.jpg)
+
+_grafana.com dashboard_ [#10620](https://grafana.com/grafana/dashboards/10620)
+
+### Jobs
+
+![grafana_dashboard_jobs](/docs/images/grafana_dashboard_jobs.jpg)
+
+_grafana.com dashboard_ [#13328](https://grafana.com/grafana/dashboards/13328)
+
+### Environments / Deployments
+
+![grafana_dashboard_environments](/docs/images/grafana_dashboard_environments.jpg)
+
+_grafana.com dashboard_ [#13329](https://grafana.com/grafana/dashboards/13329)
+
+If you want to quickly try them out with your own data, have a look into the [examples/quickstart](./examples/quickstart/README.md) folder which contains documentation to provision test version of the exporter, prometheus and also grafana in **~5min** using `docker-compose`
 
 ## Install
 
@@ -35,7 +51,9 @@ If you are interested into trying it out, have a look into the [examples/quickst
 ### Docker
 
 ```bash
-~$ docker run -it --rm mvisonneau/gitlab-ci-pipelines-exporter
+~$ docker run -it --rm docker.io/mvisonneau/gitlab-ci-pipelines-exporter
+or
+~$ docker run -it --rm ghcr.io/mvisonneau/gitlab-ci-pipelines-exporter
 ```
 
 ### Scoop
@@ -95,7 +113,7 @@ EOF
 
 ## Configuration syntax
 
-The **complete configuration syntax** [is maintained here](docs/configuration_syntax.md).
+The **configuration syntax** [is maintained here](docs/configuration_syntax.md).
 
 ## Quickstart
 
@@ -142,7 +160,7 @@ INFO[0000] found project refs                            project-path-with-names
 INFO[0000] found project refs                            project-path-with-namespace=foo/bar project-ref=main
 ```
 
-And this is an example of the metrics you should expect to retrieve
+And this is an example of the metrics you should expect to retrieve, the **detailed list of exported metrics** [is maintained here](docs/metrics.md).
 
 ```bash
 ~$ curl -s localhost:8080/metrics | grep gitlab_ci
@@ -200,52 +218,6 @@ gitlab_ci_pipeline_time_since_last_run_seconds{project="foo/project",ref="dev",t
 gitlab_ci_pipeline_time_since_last_run_seconds{project="foo/project",ref="main",topics="",variables=""} 4.151883e+06
 gitlab_ci_pipeline_time_since_last_run_seconds{project="bar/project",ref="main",topics="",variables=""} 1.907042e+06
 gitlab_ci_pipeline_time_since_last_run_seconds{project="foo/bar",ref="main",topics="",variables="FOO:BAR"} 65456
-```
-
-If `fetch_pipeline_job_metrics` is enabled, expect additional metrics:
-
-```bash
-~$ curl -s http://localhost:8080/metrics | grep job
-# HELP gitlab_ci_pipeline_job_run_count GitLab CI pipeline job run count
-# TYPE gitlab_ci_pipeline_job_run_count counter
-gitlab_ci_pipeline_job_run_count{job="build",project="bar/project",ref="main",stage="build",topics=""} 1
-gitlab_ci_pipeline_job_run_count{job="test",project="bar/project",ref="main",stage="build",topics=""} 1
-# HELP gitlab_ci_pipeline_last_job_run_artifact_size Filesize of the most recent job artifacts
-# TYPE gitlab_ci_pipeline_last_job_run_artifact_size gauge
-gitlab_ci_pipeline_last_job_run_artifact_size{job="build",project="bar/project",ref="main",stage="build",topics=""} 1.3793677e+07
-gitlab_ci_pipeline_last_job_run_artifact_size{job="test",project="bar/project",ref="main",stage="build",topics=""} 257737
-# HELP gitlab_ci_pipeline_last_job_run_duration_seconds Duration of last job run
-# TYPE gitlab_ci_pipeline_last_job_run_duration_seconds gauge
-gitlab_ci_pipeline_last_job_run_duration_seconds{job="build",project="bar/project",ref="main",stage="build",topics=""} 826.064469
-gitlab_ci_pipeline_last_job_run_duration_seconds{job="test",project="bar/project",ref="main",stage="test",topics=""} 519.873374
-# HELP gitlab_ci_pipeline_last_job_run_status Status of the most recent job
-# TYPE gitlab_ci_pipeline_last_job_run_status gauge
-gitlab_ci_pipeline_last_job_run_status{job="build",project="bar/project",ref="main",stage="build",status="failed",topics=""} 0
-gitlab_ci_pipeline_last_job_run_status{job="build",project="bar/project",ref="main",stage="build",status="running",topics=""} 0
-gitlab_ci_pipeline_last_job_run_status{job="build",project="bar/project",ref="main",stage="build",status="success",topics=""} 1
-gitlab_ci_pipeline_last_job_run_status{job="test",project="bar/project",ref="main",stage="test",status="failed",topics=""} 1
-gitlab_ci_pipeline_last_job_run_status{job="test",project="bar/project",ref="main",stage="test",status="running",topics=""} 0
-gitlab_ci_pipeline_last_job_run_status{job="test",project="bar/project",ref="main",stage="test",status="success",topics=""} 0 
-# HELP gitlab_ci_pipeline_time_since_last_job_run_seconds Elapsed time since most recent GitLab CI job run.
-# TYPE gitlab_ci_pipeline_time_since_last_job_run_seconds gauge
-gitlab_ci_pipeline_time_since_last_job_run_seconds{job="build",project="bar/project",ref="main",stage="build",topics=""} 52422
-gitlab_ci_pipeline_time_since_last_job_run_seconds{job="test",project="bar/project",ref="main",stage="test",topics=""} 1.0260727e+07
-```
-
-If the number of metrics generated by fetching jobs becomes a problem, you can enable `output_sparse_status_metrics` on a global, per-project or per-wildcard basis. When enabled, only labels matching the previous pipeline or job status will be submitted (with value `1`) rather than all label combinations submitted but with `0` value where the status does not match the previous run, for example:
-
-```bash
-# output_sparse_status_metrics: false
-gitlab_ci_pipeline_last_job_run_status{job="test",project="bar/project",ref="main",stage="test",status="canceled",topics=""} 0
-gitlab_ci_pipeline_last_job_run_status{job="test",project="bar/project",ref="main",stage="test",status="failed",topics=""} 0
-gitlab_ci_pipeline_last_job_run_status{job="test",project="bar/project",ref="main",stage="test",status="manual",topics=""} 0
-gitlab_ci_pipeline_last_job_run_status{job="test",project="bar/project",ref="main",stage="test",status="pending",topics=""} 0
-gitlab_ci_pipeline_last_job_run_status{job="test",project="bar/project",ref="main",stage="test",status="running",topics=""} 0
-gitlab_ci_pipeline_last_job_run_status{job="test",project="bar/project",ref="main",stage="test",status="skipped",topics=""} 0
-gitlab_ci_pipeline_last_job_run_status{job="test",project="bar/project",ref="main",stage="test",status="success",topics=""} 1
-
-# output_sparse_status_metrics: true
-gitlab_ci_pipeline_last_job_run_status{job="test",project="bar/project",ref="main",stage="test",status="success",topics=""} 1
 ```
 
 ## HA implementation

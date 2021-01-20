@@ -11,6 +11,13 @@ func TestNewCollectorFunctions(t *testing.T) {
 	for _, f := range [](func() prometheus.Collector){
 		NewCollectorCoverage,
 		NewCollectorDurationSeconds,
+		NewCollectorEnvironmentBehindCommitsCount,
+		NewCollectorEnvironmentBehindDurationSeconds,
+		NewCollectorEnvironmentDeploymentDurationSeconds,
+		NewCollectorEnvironmentDeploymentJobID,
+		NewCollectorEnvironmentDeploymentStatus,
+		NewCollectorEnvironmentDeploymentTimestamp,
+		NewCollectorEnvironmentInformation,
 		NewCollectorID,
 		NewCollectorJobArtifactSizeBytes,
 		NewCollectorJobDurationSeconds,
@@ -28,6 +35,7 @@ func TestNewCollectorFunctions(t *testing.T) {
 	for _, f := range [](func() prometheus.Collector){
 		NewCollectorJobRunCount,
 		NewCollectorRunCount,
+		NewCollectorEnvironmentDeploymentCount,
 	} {
 		c := f()
 		assert.NotNil(t, c)

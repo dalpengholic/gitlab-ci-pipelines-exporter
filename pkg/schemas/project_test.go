@@ -37,6 +37,42 @@ func TestOutputSparseStatusMetrics(t *testing.T) {
 	assert.Equal(t, defaultProjectOutputSparseStatusMetrics, project.OutputSparseStatusMetrics())
 }
 
+func TestPullEnvironmentsFromProjectsEnabled(t *testing.T) {
+	cfg, project := NewTestProjectVariables()
+	assert.Equal(t, defaultProjectPullEnvironmentsEnabled, project.Pull.Environments.Enabled())
+
+	cfg.ProjectDefaults.Pull.Environments.EnabledValue = pointy.Bool(!defaultProjectPullEnvironmentsEnabled)
+	UpdateProjectDefaults(cfg.ProjectDefaults)
+	assert.Equal(t, defaultProjectPullEnvironmentsEnabled, project.Pull.Environments.Enabled())
+
+	project.Pull.Environments.EnabledValue = pointy.Bool(defaultProjectPullEnvironmentsEnabled)
+	assert.Equal(t, defaultProjectPullEnvironmentsEnabled, project.Pull.Environments.Enabled())
+}
+
+func TestPullEnvironmentsFromProjectsNameRegexp(t *testing.T) {
+	cfg, project := NewTestProjectVariables()
+	assert.Equal(t, defaultProjectPullEnvironmentsNameRegexp, project.Pull.Environments.NameRegexp())
+
+	cfg.ProjectDefaults.Pull.Environments.NameRegexpValue = pointy.String("foo")
+	UpdateProjectDefaults(cfg.ProjectDefaults)
+	assert.Equal(t, "foo", project.Pull.Environments.NameRegexp())
+
+	project.Pull.Environments.NameRegexpValue = pointy.String("bar")
+	assert.Equal(t, "bar", project.Pull.Environments.NameRegexp())
+}
+
+func TestPullEnvironmentsFromProjectsTagsRegexp(t *testing.T) {
+	cfg, project := NewTestProjectVariables()
+	assert.Equal(t, defaultProjectPullEnvironmentsTagsRegexp, project.Pull.Environments.TagsRegexp())
+
+	cfg.ProjectDefaults.Pull.Environments.TagsRegexpValue = pointy.String("foo")
+	UpdateProjectDefaults(cfg.ProjectDefaults)
+	assert.Equal(t, "foo", project.Pull.Environments.TagsRegexp())
+
+	project.Pull.Environments.TagsRegexpValue = pointy.String("bar")
+	assert.Equal(t, "bar", project.Pull.Environments.TagsRegexp())
+}
+
 func TestPullRefsRegexp(t *testing.T) {
 	cfg, project := NewTestProjectVariables()
 	assert.Equal(t, defaultProjectPullRefsRegexp, project.Pull.Refs.Regexp())
@@ -47,6 +83,18 @@ func TestPullRefsRegexp(t *testing.T) {
 
 	project.Pull.Refs.RegexpValue = pointy.String("bar")
 	assert.Equal(t, "bar", project.Pull.Refs.Regexp())
+}
+
+func TestPullRefsMaxAgeSeconds(t *testing.T) {
+	cfg, project := NewTestProjectVariables()
+	assert.Equal(t, defaultProjectPullRefsMaxAgeSeconds, project.Pull.Refs.MaxAgeSeconds())
+
+	cfg.ProjectDefaults.Pull.Refs.MaxAgeSecondsValue = pointy.Uint(1)
+	UpdateProjectDefaults(cfg.ProjectDefaults)
+	assert.Equal(t, uint(1), project.Pull.Refs.MaxAgeSeconds())
+
+	project.Pull.Refs.MaxAgeSecondsValue = pointy.Uint(2)
+	assert.Equal(t, uint(2), project.Pull.Refs.MaxAgeSeconds())
 }
 
 func TestPullRefsFromPipelinesEnabled(t *testing.T) {
@@ -107,6 +155,18 @@ func TestPullPipelineJobsEnabled(t *testing.T) {
 
 	project.Pull.Pipeline.Jobs.EnabledValue = pointy.Bool(defaultProjectPullPipelineJobsEnabled)
 	assert.Equal(t, defaultProjectPullPipelineJobsEnabled, project.Pull.Pipeline.Jobs.Enabled())
+}
+
+func TestPullPipelineJobsFromChildPipelinesEnabled(t *testing.T) {
+	cfg, project := NewTestProjectVariables()
+	assert.Equal(t, defaultProjectPullPipelineJobsFromChildPipelinesEnabled, project.Pull.Pipeline.Jobs.FromChildPipelines.Enabled())
+
+	cfg.ProjectDefaults.Pull.Pipeline.Jobs.FromChildPipelines.EnabledValue = pointy.Bool(!defaultProjectPullPipelineJobsFromChildPipelinesEnabled)
+	UpdateProjectDefaults(cfg.ProjectDefaults)
+	assert.Equal(t, defaultProjectPullPipelineJobsFromChildPipelinesEnabled, project.Pull.Pipeline.Jobs.FromChildPipelines.Enabled())
+
+	project.Pull.Pipeline.Jobs.FromChildPipelines.EnabledValue = pointy.Bool(defaultProjectPullPipelineJobsFromChildPipelinesEnabled)
+	assert.Equal(t, defaultProjectPullPipelineJobsFromChildPipelinesEnabled, project.Pull.Pipeline.Jobs.FromChildPipelines.Enabled())
 }
 
 func TestPullPipelineVariablesEnabled(t *testing.T) {

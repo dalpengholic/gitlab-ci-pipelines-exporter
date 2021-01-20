@@ -11,8 +11,11 @@ type Local struct {
 	projects      schemas.Projects
 	projectsMutex sync.RWMutex
 
-	projectsRefs      schemas.ProjectsRefs
-	projectsRefsMutex sync.RWMutex
+	environments      schemas.Environments
+	environmentsMutex sync.RWMutex
+
+	refs      schemas.Refs
+	refsMutex sync.RWMutex
 
 	metrics      schemas.Metrics
 	metricsMutex sync.RWMutex
@@ -81,67 +84,130 @@ func (l *Local) ProjectsCount() (int64, error) {
 	return int64(len(l.projects)), nil
 }
 
-// SetProjectRef ..
-func (l *Local) SetProjectRef(pr schemas.ProjectRef) error {
-	l.projectsRefsMutex.Lock()
-	defer l.projectsRefsMutex.Unlock()
+// SetEnvironment ..
+func (l *Local) SetEnvironment(environment schemas.Environment) error {
+	l.environmentsMutex.Lock()
+	defer l.environmentsMutex.Unlock()
 
-	l.projectsRefs[pr.Key()] = pr
+	l.environments[environment.Key()] = environment
 	return nil
 }
 
-// DelProjectRef ..
-func (l *Local) DelProjectRef(k schemas.ProjectRefKey) error {
-	l.projectsRefsMutex.Lock()
-	defer l.projectsRefsMutex.Unlock()
+// DelEnvironment ..
+func (l *Local) DelEnvironment(k schemas.EnvironmentKey) error {
+	l.environmentsMutex.Lock()
+	defer l.environmentsMutex.Unlock()
 
-	delete(l.projectsRefs, k)
+	delete(l.environments, k)
 	return nil
 }
 
-// GetProjectRef ..
-func (l *Local) GetProjectRef(pr *schemas.ProjectRef) error {
-	exists, err := l.ProjectRefExists(pr.Key())
+// GetEnvironment ..
+func (l *Local) GetEnvironment(environment *schemas.Environment) error {
+	exists, err := l.EnvironmentExists(environment.Key())
 	if err != nil {
 		return err
 	}
 
 	if exists {
-		l.projectsRefsMutex.RLock()
-		*pr = l.projectsRefs[pr.Key()]
-		l.projectsRefsMutex.RUnlock()
+		l.environmentsMutex.RLock()
+		*environment = l.environments[environment.Key()]
+		l.environmentsMutex.RUnlock()
 	}
 
 	return nil
 }
 
-// ProjectRefExists ..
-func (l *Local) ProjectRefExists(k schemas.ProjectRefKey) (bool, error) {
-	l.projectsRefsMutex.RLock()
-	defer l.projectsRefsMutex.RUnlock()
+// EnvironmentExists ..
+func (l *Local) EnvironmentExists(k schemas.EnvironmentKey) (bool, error) {
+	l.environmentsMutex.RLock()
+	defer l.environmentsMutex.RUnlock()
 
-	_, ok := l.projectsRefs[k]
+	_, ok := l.environments[k]
 	return ok, nil
 }
 
-// ProjectsRefs ..
-func (l *Local) ProjectsRefs() (projectsRefs schemas.ProjectsRefs, err error) {
-	projectsRefs = make(schemas.ProjectsRefs)
-	l.projectsRefsMutex.RLock()
-	defer l.projectsRefsMutex.RUnlock()
+// Environments ..
+func (l *Local) Environments() (environments schemas.Environments, err error) {
+	environments = make(schemas.Environments)
+	l.environmentsMutex.RLock()
+	defer l.environmentsMutex.RUnlock()
 
-	for k, v := range l.projectsRefs {
-		projectsRefs[k] = v
+	for k, v := range l.environments {
+		environments[k] = v
 	}
 	return
 }
 
-// ProjectsRefsCount ..
-func (l *Local) ProjectsRefsCount() (int64, error) {
-	l.projectsRefsMutex.RLock()
-	defer l.projectsRefsMutex.RUnlock()
+// EnvironmentsCount ..
+func (l *Local) EnvironmentsCount() (int64, error) {
+	l.environmentsMutex.RLock()
+	defer l.environmentsMutex.RUnlock()
 
-	return int64(len(l.projectsRefs)), nil
+	return int64(len(l.environments)), nil
+}
+
+// SetRef ..
+func (l *Local) SetRef(ref schemas.Ref) error {
+	l.refsMutex.Lock()
+	defer l.refsMutex.Unlock()
+
+	l.refs[ref.Key()] = ref
+	return nil
+}
+
+// DelRef ..
+func (l *Local) DelRef(k schemas.RefKey) error {
+	l.refsMutex.Lock()
+	defer l.refsMutex.Unlock()
+
+	delete(l.refs, k)
+	return nil
+}
+
+// GetRef ..
+func (l *Local) GetRef(ref *schemas.Ref) error {
+	exists, err := l.RefExists(ref.Key())
+	if err != nil {
+		return err
+	}
+
+	if exists {
+		l.refsMutex.RLock()
+		*ref = l.refs[ref.Key()]
+		l.refsMutex.RUnlock()
+	}
+
+	return nil
+}
+
+// RefExists ..
+func (l *Local) RefExists(k schemas.RefKey) (bool, error) {
+	l.refsMutex.RLock()
+	defer l.refsMutex.RUnlock()
+
+	_, ok := l.refs[k]
+	return ok, nil
+}
+
+// Refs ..
+func (l *Local) Refs() (refs schemas.Refs, err error) {
+	refs = make(schemas.Refs)
+	l.refsMutex.RLock()
+	defer l.refsMutex.RUnlock()
+
+	for k, v := range l.refs {
+		refs[k] = v
+	}
+	return
+}
+
+// RefsCount ..
+func (l *Local) RefsCount() (int64, error) {
+	l.refsMutex.RLock()
+	defer l.refsMutex.RUnlock()
+
+	return int64(len(l.refs)), nil
 }
 
 // SetMetric ..

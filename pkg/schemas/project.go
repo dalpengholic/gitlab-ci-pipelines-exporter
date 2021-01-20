@@ -6,15 +6,20 @@ import (
 )
 
 var (
-	defaultProjectOutputSparseStatusMetrics        = true
-	defaultProjectPullRefsRegexp                   = `^(main|master)$`
-	defaultProjectPullRefsFromPipelinesEnabled     = false
-	defaultProjectPullRefsFromPipelinesDepth       = 100
-	defaultProjectPullRefsFromMergeRequestsEnabled = false
-	defaultProjectPullRefsFromMergeRequestsDepth   = 1
-	defaultProjectPullPipelineJobsEnabled          = false
-	defaultProjectPullPipelineVariablesEnabled     = false
-	defaultProjectPullPipelineVariablesRegexp      = `.*`
+	defaultProjectOutputSparseStatusMetrics                      = true
+	defaultProjectPullEnvironmentsEnabled                        = false
+	defaultProjectPullEnvironmentsNameRegexp                     = `.*`
+	defaultProjectPullEnvironmentsTagsRegexp                     = `.*`
+	defaultProjectPullRefsRegexp                                 = `^(main|master)$`
+	defaultProjectPullRefsMaxAgeSeconds                     uint = 0
+	defaultProjectPullRefsFromPipelinesEnabled                   = false
+	defaultProjectPullRefsFromPipelinesDepth                     = 100
+	defaultProjectPullRefsFromMergeRequestsEnabled               = false
+	defaultProjectPullRefsFromMergeRequestsDepth                 = 1
+	defaultProjectPullPipelineJobsEnabled                        = false
+	defaultProjectPullPipelineJobsFromChildPipelinesEnabled      = true
+	defaultProjectPullPipelineVariablesEnabled                   = false
+	defaultProjectPullPipelineVariablesRegexp                    = `.*`
 )
 
 // ProjectParameters for the fetching configuration of Projects and Wildcards
@@ -28,14 +33,30 @@ type ProjectParameters struct {
 
 // ProjectPull ..
 type ProjectPull struct {
-	Refs     ProjectPullRefs     `yaml:"refs"`
-	Pipeline ProjectPullPipeline `yaml:"pipeline"`
+	Environments ProjectPullEnvironments `yaml:"environments"`
+	Refs         ProjectPullRefs         `yaml:"refs"`
+	Pipeline     ProjectPullPipeline     `yaml:"pipeline"`
+}
+
+// ProjectPullEnvironments ..
+type ProjectPullEnvironments struct {
+	// Whether to pull environments/deployments or not for this project
+	EnabledValue *bool `yaml:"enabled"`
+
+	// Regular expression to filter environments to fetch by their names (defaults to '^prod')
+	NameRegexpValue *string `yaml:"name_regexp"`
+
+	// Regular expression to filter out commit id to consider when deployments are based upon tags (defaults to '.*')
+	TagsRegexpValue *string `yaml:"tags_regexp"`
 }
 
 // ProjectPullRefs ..
 type ProjectPullRefs struct {
-	// Regular expression to filter project refs to fetch (defaults to '.*')
+	// Regular expression to filter refs to fetch (defaults to '.*')
 	RegexpValue *string `yaml:"regexp"`
+
+	// If the age of the most recent pipeline for the ref is greater than this value, the ref won't get exported
+	MaxAgeSecondsValue *uint `yaml:"max_age_seconds"`
 
 	// From handles ProjectPullRefsFromParameters configuration
 	From ProjectPullRefsFrom `yaml:"from"`
@@ -72,6 +93,15 @@ type ProjectPullPipeline struct {
 type ProjectPullPipelineJobs struct {
 	// Enabled set to true will pull pipeline jobs related metrics
 	EnabledValue *bool `yaml:"enabled"`
+
+	// Pull pipeline jobs from child/downstream pipelines
+	FromChildPipelines ProjectPullPipelineJobsFromChildPipelines `yaml:"from_child_pipelines"`
+}
+
+// ProjectPullPipelineJobsFromChildPipelines ..
+type ProjectPullPipelineJobsFromChildPipelines struct {
+	// Enabled set to true will pull pipeline jobs from child/downstream pipelines related metrics
+	EnabledValue *bool `yaml:"enabled"`
 }
 
 // ProjectPullPipelineVariables ..
@@ -85,8 +115,24 @@ type ProjectPullPipelineVariables struct {
 
 // UpdateProjectDefaults ..
 func UpdateProjectDefaults(d ProjectParameters) {
+	if d.Pull.Environments.EnabledValue != nil {
+		defaultProjectPullEnvironmentsEnabled = *d.Pull.Environments.EnabledValue
+	}
+
+	if d.Pull.Environments.NameRegexpValue != nil {
+		defaultProjectPullEnvironmentsNameRegexp = *d.Pull.Environments.NameRegexpValue
+	}
+
+	if d.Pull.Environments.TagsRegexpValue != nil {
+		defaultProjectPullEnvironmentsTagsRegexp = *d.Pull.Environments.TagsRegexpValue
+	}
+
 	if d.Pull.Refs.RegexpValue != nil {
 		defaultProjectPullRefsRegexp = *d.Pull.Refs.RegexpValue
+	}
+
+	if d.Pull.Refs.MaxAgeSecondsValue != nil {
+		defaultProjectPullRefsMaxAgeSeconds = *d.Pull.Refs.MaxAgeSecondsValue
 	}
 
 	if d.Pull.Refs.From.Pipelines.EnabledValue != nil {
@@ -107,6 +153,10 @@ func UpdateProjectDefaults(d ProjectParameters) {
 
 	if d.Pull.Pipeline.Jobs.EnabledValue != nil {
 		defaultProjectPullPipelineJobsEnabled = *d.Pull.Pipeline.Jobs.EnabledValue
+	}
+
+	if d.Pull.Pipeline.Jobs.FromChildPipelines.EnabledValue != nil {
+		defaultProjectPullPipelineJobsFromChildPipelinesEnabled = *d.Pull.Pipeline.Jobs.FromChildPipelines.EnabledValue
 	}
 
 	if d.Pull.Pipeline.Variables.EnabledValue != nil {
@@ -147,6 +197,33 @@ func (p *ProjectParameters) OutputSparseStatusMetrics() bool {
 	return defaultProjectOutputSparseStatusMetrics
 }
 
+// Enabled ...
+func (p *ProjectPullEnvironments) Enabled() bool {
+	if p.EnabledValue != nil {
+		return *p.EnabledValue
+	}
+
+	return defaultProjectPullEnvironmentsEnabled
+}
+
+// NameRegexp ...
+func (p *ProjectPullEnvironments) NameRegexp() string {
+	if p.NameRegexpValue != nil {
+		return *p.NameRegexpValue
+	}
+
+	return defaultProjectPullEnvironmentsNameRegexp
+}
+
+// TagsRegexp ...
+func (p *ProjectPullEnvironments) TagsRegexp() string {
+	if p.TagsRegexpValue != nil {
+		return *p.TagsRegexpValue
+	}
+
+	return defaultProjectPullEnvironmentsTagsRegexp
+}
+
 // Regexp ...
 func (p *ProjectPullRefs) Regexp() string {
 	if p.RegexpValue != nil {
@@ -154,6 +231,15 @@ func (p *ProjectPullRefs) Regexp() string {
 	}
 
 	return defaultProjectPullRefsRegexp
+}
+
+// MaxAgeSeconds ...
+func (p *ProjectPullRefs) MaxAgeSeconds() uint {
+	if p.MaxAgeSecondsValue != nil {
+		return *p.MaxAgeSecondsValue
+	}
+
+	return defaultProjectPullRefsMaxAgeSeconds
 }
 
 // Enabled ...
@@ -199,6 +285,15 @@ func (p *ProjectPullPipelineJobs) Enabled() bool {
 	}
 
 	return defaultProjectPullPipelineJobsEnabled
+}
+
+// Enabled ...
+func (p *ProjectPullPipelineJobsFromChildPipelines) Enabled() bool {
+	if p.EnabledValue != nil {
+		return *p.EnabledValue
+	}
+
+	return defaultProjectPullPipelineJobsFromChildPipelinesEnabled
 }
 
 // Enabled ...

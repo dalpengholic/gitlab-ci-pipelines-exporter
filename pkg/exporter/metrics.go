@@ -26,18 +26,26 @@ func NewRegistry() *Registry {
 	r := &Registry{
 		Registry: prometheus.NewRegistry(),
 		Collectors: RegistryCollectors{
-			schemas.MetricKindCoverage:             NewCollectorCoverage(),
-			schemas.MetricKindDurationSeconds:      NewCollectorDurationSeconds(),
-			schemas.MetricKindID:                   NewCollectorID(),
-			schemas.MetricKindJobArtifactSizeBytes: NewCollectorJobArtifactSizeBytes(),
-			schemas.MetricKindJobDurationSeconds:   NewCollectorJobDurationSeconds(),
-			schemas.MetricKindJobID:                NewCollectorJobID(),
-			schemas.MetricKindJobRunCount:          NewCollectorJobRunCount(),
-			schemas.MetricKindJobStatus:            NewCollectorJobStatus(),
-			schemas.MetricKindJobTimestamp:         NewCollectorJobTimestamp(),
-			schemas.MetricKindRunCount:             NewCollectorRunCount(),
-			schemas.MetricKindStatus:               NewCollectorStatus(),
-			schemas.MetricKindTimestamp:            NewCollectorTimestamp(),
+			schemas.MetricKindCoverage:                             NewCollectorCoverage(),
+			schemas.MetricKindDurationSeconds:                      NewCollectorDurationSeconds(),
+			schemas.MetricKindEnvironmentBehindCommitsCount:        NewCollectorEnvironmentBehindCommitsCount(),
+			schemas.MetricKindEnvironmentBehindDurationSeconds:     NewCollectorEnvironmentBehindDurationSeconds(),
+			schemas.MetricKindEnvironmentDeploymentCount:           NewCollectorEnvironmentDeploymentCount(),
+			schemas.MetricKindEnvironmentDeploymentDurationSeconds: NewCollectorEnvironmentDeploymentDurationSeconds(),
+			schemas.MetricKindEnvironmentDeploymentJobID:           NewCollectorEnvironmentDeploymentJobID(),
+			schemas.MetricKindEnvironmentDeploymentStatus:          NewCollectorEnvironmentDeploymentStatus(),
+			schemas.MetricKindEnvironmentDeploymentTimestamp:       NewCollectorEnvironmentDeploymentTimestamp(),
+			schemas.MetricKindEnvironmentInformation:               NewCollectorEnvironmentInformation(),
+			schemas.MetricKindID:                                   NewCollectorID(),
+			schemas.MetricKindJobArtifactSizeBytes:                 NewCollectorJobArtifactSizeBytes(),
+			schemas.MetricKindJobDurationSeconds:                   NewCollectorJobDurationSeconds(),
+			schemas.MetricKindJobID:                                NewCollectorJobID(),
+			schemas.MetricKindJobRunCount:                          NewCollectorJobRunCount(),
+			schemas.MetricKindJobStatus:                            NewCollectorJobStatus(),
+			schemas.MetricKindJobTimestamp:                         NewCollectorJobTimestamp(),
+			schemas.MetricKindRunCount:                             NewCollectorRunCount(),
+			schemas.MetricKindStatus:                               NewCollectorStatus(),
+			schemas.MetricKindTimestamp:                            NewCollectorTimestamp(),
 		},
 	}
 
@@ -79,6 +87,9 @@ func (r *Registry) GetCollector(kind schemas.MetricKind) prometheus.Collector {
 
 // ExportMetrics ..
 func (r *Registry) ExportMetrics() error {
+	cfgUpdateLock.RLock()
+	defer cfgUpdateLock.RUnlock()
+
 	metrics, err := store.Metrics()
 	if err != nil {
 		return err
